@@ -1,0 +1,1009 @@
+<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CommandLine.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache Commons CLI</a> &gt; <a href="index.source.html" class="el_package">org.apache.commons.cli</a> &gt; <span class="el_source">CommandLine.java</span></div><h1>CommandLine.java</h1><pre class="source lang-java linenums">/*
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the &quot;License&quot;); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+      https://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+ */
+
+package org.apache.commons.cli;
+
+import java.io.Serializable;
+import java.lang.reflect.Array;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Properties;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+
+/**
+ * Represents list of arguments parsed against a {@link Options} descriptor.
+ * &lt;p&gt;
+ * It allows querying of a boolean {@link #hasOption(String optionName)}, in addition to retrieving the
+ * {@link #getOptionValue(String optionName)} for options requiring arguments.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * Additionally, any left-over or unrecognized arguments, are available for further processing.
+ * &lt;/p&gt;
+ */
+public class CommandLine implements Serializable {
+
+    /**
+     * A nested builder class to create {@code CommandLine} instance using descriptive methods.
+     *
+     * @since 1.4
+     */
+    public static final class Builder implements Supplier&lt;CommandLine&gt; {
+
+        /**
+         * Prints an Option to {@link System#out}.
+         */
+<span class="fc" id="L53">        static final Consumer&lt;Option&gt; DEPRECATED_HANDLER = o -&gt; System.out.println(o.toDeprecatedString());</span>
+
+        /** The unrecognized options/arguments */
+<span class="fc" id="L56">        private final List&lt;String&gt; args = new LinkedList&lt;&gt;();</span>
+
+        /** The processed options */
+<span class="fc" id="L59">        private final List&lt;Option&gt; options = new ArrayList&lt;&gt;();</span>
+
+        /**
+         * Deprecated Option handler.
+         */
+<span class="fc" id="L64">        private Consumer&lt;Option&gt; deprecatedHandler = DEPRECATED_HANDLER;</span>
+
+        /**
+         * Constructs a new instance.
+         *
+         * @deprecated Use {@link #builder()}.
+         */
+        @Deprecated
+<span class="fc" id="L72">        public Builder() {</span>
+            // empty
+<span class="fc" id="L74">        }</span>
+
+        /**
+         * Adds left-over unrecognized option/argument.
+         *
+         * @param arg the unrecognized option/argument.
+         * @return this Builder instance for method chaining.
+         */
+        public Builder addArg(final String arg) {
+<span class="fc bfc" id="L83" title="All 2 branches covered.">            if (arg != null) {</span>
+<span class="fc" id="L84">                args.add(arg);</span>
+            }
+<span class="fc" id="L86">            return this;</span>
+        }
+
+        /**
+         * Adds an option to the command line. The values of the option are stored.
+         *
+         * @param option the processed option.
+         * @return this Builder instance for method chaining.
+         */
+        public Builder addOption(final Option option) {
+<span class="fc bfc" id="L96" title="All 2 branches covered.">            if (option != null) {</span>
+<span class="fc" id="L97">                options.add(option);</span>
+            }
+<span class="fc" id="L99">            return this;</span>
+        }
+
+        /**
+         * Creates a new instance.
+         *
+         * @return a new instance.
+         * @deprecated Use {@link #get()}.
+         */
+        @Deprecated
+        public CommandLine build() {
+<span class="fc" id="L110">            return get();</span>
+        }
+
+        /**
+         * Creates a new instance.
+         *
+         * @return a new instance.
+         * @since 1.10.0
+         */
+        @Override
+        public CommandLine get() {
+<span class="fc" id="L121">            return new CommandLine(args, options, deprecatedHandler);</span>
+        }
+
+        /**
+         * Sets the deprecated option handler.
+         *
+         * @param deprecatedHandler the deprecated option handler.
+         * @return {@code this} instance.
+         * @since 1.7.0
+         */
+        public Builder setDeprecatedHandler(final Consumer&lt;Option&gt; deprecatedHandler) {
+<span class="fc" id="L132">            this.deprecatedHandler = deprecatedHandler;</span>
+<span class="fc" id="L133">            return this;</span>
+        }
+    }
+
+    /** The serial version UID. */
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Creates a new builder.
+     *
+     * @return a new builder.
+     * @since 1.7.0
+     */
+    public static Builder builder() {
+<span class="fc" id="L147">        return new Builder();</span>
+    }
+
+    /** The unrecognized options/arguments */
+    private final List&lt;String&gt; args;
+
+    /** The processed options */
+    private final List&lt;Option&gt; options;
+
+    /**
+     * The deprecated option handler.
+     * &lt;p&gt;
+     * If you want to serialize this field, use a serialization proxy.
+     * &lt;/p&gt;
+     */
+    private final transient Consumer&lt;Option&gt; deprecatedHandler;
+
+    /**
+     * Creates a command line.
+     */
+    protected CommandLine() {
+<span class="fc" id="L168">        this(new LinkedList&lt;&gt;(), new ArrayList&lt;&gt;(), Builder.DEPRECATED_HANDLER);</span>
+<span class="fc" id="L169">    }</span>
+
+    /**
+     * Creates a command line.
+     */
+<span class="fc" id="L174">    private CommandLine(final List&lt;String&gt; args, final List&lt;Option&gt; options, final Consumer&lt;Option&gt; deprecatedHandler) {</span>
+<span class="fc" id="L175">        this.args = Objects.requireNonNull(args, &quot;args&quot;);</span>
+<span class="fc" id="L176">        this.options = Objects.requireNonNull(options, &quot;options&quot;);</span>
+<span class="fc" id="L177">        this.deprecatedHandler = deprecatedHandler;</span>
+<span class="fc" id="L178">    }</span>
+
+    /**
+     * Adds left-over unrecognized option/argument.
+     *
+     * @param arg the unrecognized option/argument.
+     */
+    protected void addArg(final String arg) {
+<span class="fc bfc" id="L186" title="All 2 branches covered.">        if (arg != null) {</span>
+<span class="fc" id="L187">            args.add(arg);</span>
+        }
+<span class="fc" id="L189">    }</span>
+
+    /**
+     * Adds an option to the command line. The values of the option are stored.
+     *
+     * @param option the processed option.
+     */
+    protected void addOption(final Option option) {
+<span class="fc bfc" id="L197" title="All 2 branches covered.">        if (option != null) {</span>
+<span class="fc" id="L198">            options.add(option);</span>
+        }
+<span class="fc" id="L200">    }</span>
+
+    private &lt;T&gt; T get(final Supplier&lt;T&gt; supplier) {
+<span class="fc bfc" id="L203" title="All 2 branches covered.">        return supplier == null ? null : supplier.get();</span>
+    }
+
+    /**
+     * Gets any left-over non-recognized options and arguments
+     *
+     * @return remaining items passed in but not parsed as a {@code List}.
+     */
+    public List&lt;String&gt; getArgList() {
+<span class="fc" id="L212">        return args;</span>
+    }
+
+    /**
+     * Gets any left-over non-recognized options and arguments
+     *
+     * @return remaining items passed in but not parsed as an array.
+     */
+    public String[] getArgs() {
+<span class="fc" id="L221">        return args.toArray(Util.EMPTY_STRING_ARRAY);</span>
+    }
+
+    /**
+     * Gets the {@code Object} type of this {@code Option}.
+     *
+     * @deprecated due to System.err message. Instead use getParsedOptionValue(char)
+     * @param optionChar the name of the option.
+     * @return the type of opt.
+     */
+    @Deprecated
+    public Object getOptionObject(final char optionChar) {
+<span class="fc" id="L233">        return getOptionObject(String.valueOf(optionChar));</span>
+    }
+
+    /**
+     * Gets the {@code Object} type of this {@code Option}.
+     *
+     * @param optionName the name of the option.
+     * @return the type of this {@code Option}.
+     * @deprecated due to System.err message. Instead use getParsedOptionValue(String)
+     */
+    @Deprecated
+    public Object getOptionObject(final String optionName) {
+        try {
+<span class="fc" id="L246">            return getParsedOptionValue(optionName);</span>
+<span class="fc" id="L247">        } catch (final ParseException pe) {</span>
+<span class="fc" id="L248">            System.err.println(&quot;Exception found converting &quot; + optionName + &quot; to desired type: &quot; + pe.getMessage());</span>
+<span class="fc" id="L249">            return null;</span>
+        }
+    }
+
+    /**
+     * Gets the map of values associated to the option. This is convenient for options specifying Java properties like
+     * &lt;code&gt;-Dparam1=value1
+     * -Dparam2=value2&lt;/code&gt;. All odd numbered values are property keys
+     * and even numbered values are property values.  If there are an odd number of values
+     * the last value is assumed to be a boolean flag and the value is &quot;true&quot;.
+     *
+     * @param option name of the option.
+     * @return The Properties mapped by the option, never {@code null} even if the option doesn't exists.
+     * @since 1.5.0
+     */
+    public Properties getOptionProperties(final Option option) {
+<span class="fc" id="L265">        final Properties props = new Properties();</span>
+<span class="fc bfc" id="L266" title="All 2 branches covered.">        for (final Option processedOption : options) {</span>
+<span class="fc bfc" id="L267" title="All 2 branches covered.">            if (processedOption.equals(option)) {</span>
+<span class="fc" id="L268">                processPropertiesFromValues(props, processedOption.getValuesList());</span>
+            }
+<span class="fc" id="L270">        }</span>
+<span class="fc" id="L271">        return props;</span>
+    }
+
+    /**
+     * Gets the map of values associated to the option. This is convenient for options specifying Java properties like
+     * &lt;code&gt;-Dparam1=value1
+     * -Dparam2=value2&lt;/code&gt;. The first argument of the option is the key, and the 2nd argument is the value. If the option
+     * has only one argument ({@code -Dfoo}) it is considered as a boolean flag and the value is {@code &quot;true&quot;}.
+     *
+     * @param optionName name of the option.
+     * @return The Properties mapped by the option, never {@code null} even if the option doesn't exists.
+     * @since 1.2
+     */
+    public Properties getOptionProperties(final String optionName) {
+<span class="fc" id="L285">        final Properties props = new Properties();</span>
+<span class="fc bfc" id="L286" title="All 2 branches covered.">        for (final Option option : options) {</span>
+<span class="fc bfc" id="L287" title="All 4 branches covered.">            if (optionName.equals(option.getOpt()) || optionName.equals(option.getLongOpt())) {</span>
+<span class="fc" id="L288">                processPropertiesFromValues(props, option.getValuesList());</span>
+            }
+<span class="fc" id="L290">        }</span>
+<span class="fc" id="L291">        return props;</span>
+    }
+
+    /**
+     * Gets an array of the processed {@link Option}s.
+     *
+     * @return an array of the processed {@link Option}s.
+     */
+    public Option[] getOptions() {
+<span class="fc" id="L300">        return options.toArray(Option.EMPTY_ARRAY);</span>
+    }
+
+    /**
+     * Gets the first argument, if any, of this option.
+     *
+     * @param optionChar the character name of the option.
+     * @return Value of the argument if option is set, and has an argument, otherwise null.
+     */
+    public String getOptionValue(final char optionChar) {
+<span class="fc" id="L310">        return getOptionValue(String.valueOf(optionChar));</span>
+    }
+
+    /**
+     * Gets the argument, if any, of an option.
+     *
+     * @param optionChar character name of the option
+     * @param defaultValue is the default value to be returned if the option is not specified.
+     * @return Value of the argument if option is set, and has an argument, otherwise {@code defaultValue}.
+     */
+    public String getOptionValue(final char optionChar, final String defaultValue) {
+<span class="fc" id="L321">        return getOptionValue(String.valueOf(optionChar), () -&gt; defaultValue);</span>
+    }
+
+    /**
+     * Gets the argument, if any, of an option.
+     *
+     * @param optionChar character name of the option
+     * @param defaultValue is a supplier for the default value to be returned if the option is not specified.
+     * @return Value of the argument if option is set, and has an argument, otherwise {@code defaultValue}.
+     * @since 1.7.0
+     */
+    public String getOptionValue(final char optionChar, final Supplier&lt;String&gt; defaultValue) {
+<span class="fc" id="L333">        return getOptionValue(String.valueOf(optionChar), defaultValue);</span>
+    }
+
+    /**
+     * Gets the first argument, if any, of this option.
+     *
+     * @param option the option.
+     * @return Value of the argument if option is set, and has an argument, otherwise null.
+     * @since 1.5.0
+     */
+    public String getOptionValue(final Option option) {
+<span class="fc" id="L344">        final String[] values = getOptionValues(option);</span>
+<span class="fc bfc" id="L345" title="All 2 branches covered.">        return values == null ? null : values[0];</span>
+    }
+
+    /**
+     * Gets the first argument, if any, of an option.
+     *
+     * @param option the option.
+     * @param defaultValue is the default value to be returned if the option is not specified.
+     * @return Value of the argument if option is set, and has an argument, otherwise {@code defaultValue}.
+     * @since 1.5.0
+     */
+    public String getOptionValue(final Option option, final String defaultValue) {
+<span class="fc" id="L357">        return getOptionValue(option, () -&gt; defaultValue);</span>
+    }
+
+    /**
+     * Gets the first argument, if any, of an option.
+     *
+     * @param option the option.
+     * @param defaultValue is a supplier for the default value to be returned if the option is not specified.
+     * @return Value of the argument if option is set, and has an argument, otherwise {@code defaultValue}.
+     * @since 1.7.0
+     */
+    public String getOptionValue(final Option option, final Supplier&lt;String&gt; defaultValue) {
+<span class="fc" id="L369">        final String answer = getOptionValue(option);</span>
+<span class="fc bfc" id="L370" title="All 2 branches covered.">        return answer != null ? answer : get(defaultValue);</span>
+    }
+
+    /**
+     * Gets the first argument, if any, of this option group.
+     *
+     * @param optionGroup the option group.
+     * @return Value of the argument if option group is selected, and has an argument, otherwise null.
+     * @since 1.9.0
+     */
+    public String getOptionValue(final OptionGroup optionGroup) {
+<span class="fc" id="L381">        final String[] values = getOptionValues(optionGroup);</span>
+<span class="fc bfc" id="L382" title="All 2 branches covered.">        return values == null ? null : values[0];</span>
+    }
+
+    /**
+     * Gets the first argument, if any, of an option group.
+     *
+     * @param optionGroup the option group.
+     * @param defaultValue is the default value to be returned if the option group is not selected.
+     * @return Value of the argument if option group is selected, and has an argument, otherwise {@code defaultValue}.
+     * @since 1.9.0
+     */
+    public String getOptionValue(final OptionGroup optionGroup, final String defaultValue) {
+<span class="fc" id="L394">        return getOptionValue(optionGroup, () -&gt; defaultValue);</span>
+    }
+
+    /**
+     * Gets the first argument, if any, of an option group.
+     *
+     * @param optionGroup the option group.
+     * @param defaultValue is a supplier for the default value to be returned if the option group is not selected.
+     * @return Value of the argument if option group is selected, and has an argument, otherwise {@code defaultValue}.
+     * @since 1.9.0
+     */
+    public String getOptionValue(final OptionGroup optionGroup, final Supplier&lt;String&gt; defaultValue) {
+<span class="fc" id="L406">        final String answer = getOptionValue(optionGroup);</span>
+<span class="fc bfc" id="L407" title="All 2 branches covered.">        return answer != null ? answer : get(defaultValue);</span>
+    }
+
+    /**
+     * Gets the first argument, if any, of this option.
+     *
+     * @param optionName the name of the option.
+     * @return Value of the argument if option is set, and has an argument, otherwise null.
+     */
+    public String getOptionValue(final String optionName) {
+<span class="fc" id="L417">        return getOptionValue(resolveOption(optionName));</span>
+    }
+
+    /**
+     * Gets the first argument, if any, of an option.
+     *
+     * @param optionName name of the option.
+     * @param defaultValue is the default value to be returned if the option is not specified.
+     * @return Value of the argument if option is set, and has an argument, otherwise {@code defaultValue}.
+     */
+    public String getOptionValue(final String optionName, final String defaultValue) {
+<span class="fc" id="L428">        return getOptionValue(resolveOption(optionName), () -&gt; defaultValue);</span>
+    }
+
+    /**
+     * Gets the first argument, if any, of an option.
+     *
+     * @param optionName name of the option.
+     * @param defaultValue is a supplier for the default value to be returned if the option is not specified.
+     * @return Value of the argument if option is set, and has an argument, otherwise {@code defaultValue}.
+     * @since 1.7.0
+     */
+    public String getOptionValue(final String optionName, final Supplier&lt;String&gt; defaultValue) {
+<span class="fc" id="L440">        return getOptionValue(resolveOption(optionName), defaultValue);</span>
+    }
+
+    /**
+     * Gets the array of values, if any, of an option.
+     *
+     * @param optionChar character name of the option.
+     * @return Values of the argument if option is set, and has an argument, otherwise null.
+     */
+    public String[] getOptionValues(final char optionChar) {
+<span class="fc" id="L450">        return getOptionValues(String.valueOf(optionChar));</span>
+    }
+
+    /**
+     * Gets the array of values, if any, of an option.
+     *
+     * @param option the option.
+     * @return Values of the argument if option is set, and has an argument, otherwise null.
+     * @since 1.5.0
+     */
+    public String[] getOptionValues(final Option option) {
+<span class="fc bfc" id="L461" title="All 2 branches covered.">        if (option == null) {</span>
+<span class="fc" id="L462">            return null;</span>
+        }
+<span class="fc" id="L464">        final List&lt;String&gt; values = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L465" title="All 2 branches covered.">        for (final Option processedOption : options) {</span>
+<span class="fc bfc" id="L466" title="All 2 branches covered.">            if (processedOption.equals(option)) {</span>
+<span class="fc bfc" id="L467" title="All 2 branches covered.">                if (option.isDeprecated()) {</span>
+<span class="fc" id="L468">                    handleDeprecated(option);</span>
+                }
+<span class="fc" id="L470">                values.addAll(processedOption.getValuesList());</span>
+            }
+<span class="fc" id="L472">        }</span>
+<span class="fc bfc" id="L473" title="All 2 branches covered.">        return values.isEmpty() ? null : values.toArray(Util.EMPTY_STRING_ARRAY);</span>
+    }
+
+    /**
+     * Gets the array of values, if any, of an option group.
+     *
+     * @param optionGroup the option group.
+     * @return Values of the argument if option group is selected, and has an argument, otherwise null.
+     * @since 1.9.0
+     */
+    public String[] getOptionValues(final OptionGroup optionGroup) {
+<span class="fc bfc" id="L484" title="All 4 branches covered.">        if (optionGroup == null || !optionGroup.isSelected()) {</span>
+<span class="fc" id="L485">            return null;</span>
+        }
+<span class="fc" id="L487">        return getOptionValues(optionGroup.getSelected());</span>
+    }
+
+    /**
+     * Gets the array of values, if any, of an option.
+     *
+     * @param optionName string name of the option.
+     * @return Values of the argument if option is set, and has an argument, otherwise null.
+     */
+    public String[] getOptionValues(final String optionName) {
+<span class="fc" id="L497">        return getOptionValues(resolveOption(optionName));</span>
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to a particular type.
+     *
+     * @param optionChar the name of the option.
+     * @param &lt;T&gt; The return type for the method.
+     * @return the value parsed into a particular object or null if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.5.0
+     */
+    public &lt;T&gt; T getParsedOptionValue(final char optionChar) throws ParseException {
+<span class="fc" id="L511">        return getParsedOptionValue(String.valueOf(optionChar));</span>
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to a particular type.
+     *
+     * @param optionChar the name of the option.
+     * @param defaultValue the default value to return if opt is not set.
+     * @param &lt;T&gt; The return type for the method.
+     * @return the value parsed into a particular object or the defaultValue if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.7.0
+     */
+    public &lt;T&gt; T getParsedOptionValue(final char optionChar, final Supplier&lt;T&gt; defaultValue) throws ParseException {
+<span class="fc" id="L526">        return getParsedOptionValue(String.valueOf(optionChar), defaultValue);</span>
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to a particular type.
+     *
+     * @param optionChar the name of the option.
+     * @param defaultValue the default value to return if opt is not set.
+     * @param &lt;T&gt; The return type for the method.
+     * @return the value parsed into a particular object or the defaultValue if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.7.0
+     */
+    public &lt;T&gt; T getParsedOptionValue(final char optionChar, final T defaultValue) throws ParseException {
+<span class="fc" id="L541">        return getParsedOptionValue(String.valueOf(optionChar), defaultValue);</span>
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to a particular type.
+     *
+     * @param option the option.
+     * @param &lt;T&gt; The return type for the method.
+     * @return the value parsed into a particular object or null if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.5.0
+     */
+    public &lt;T&gt; T getParsedOptionValue(final Option option) throws ParseException {
+<span class="fc" id="L555">        return getParsedOptionValue(option, () -&gt; null);</span>
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to a particular type.
+     *
+     * @param option the option.
+     * @param defaultValue the default value to return if opt is not set.
+     * @param &lt;T&gt; The return type for the method.
+     * @return the value parsed into a particular object or the defaultValue if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.7.0
+     */
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public &lt;T&gt; T getParsedOptionValue(final Option option, final Supplier&lt;T&gt; defaultValue) throws ParseException {
+<span class="fc bfc" id="L571" title="All 2 branches covered.">        if (option == null) {</span>
+<span class="fc" id="L572">            return get(defaultValue);</span>
+        }
+<span class="fc" id="L574">        final String res = getOptionValue(option);</span>
+        try {
+<span class="fc bfc" id="L576" title="All 2 branches covered.">            if (res == null) {</span>
+<span class="fc" id="L577">                return get(defaultValue);</span>
+            }
+<span class="fc" id="L579">            return (T) option.getConverter().apply(res);</span>
+<span class="fc" id="L580">        } catch (final Exception e) {</span>
+<span class="fc" id="L581">            throw ParseException.wrap(e);</span>
+        }
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to a particular type.
+     *
+     * @param option the option.
+     * @param defaultValue the default value to return if opt is not set.
+     * @param &lt;T&gt; The return type for the method.
+     * @return the value parsed into a particular object or the defaultValue if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.7.0
+     */
+    public &lt;T&gt; T getParsedOptionValue(final Option option, final T defaultValue) throws ParseException {
+<span class="fc" id="L597">        return getParsedOptionValue(option, () -&gt; defaultValue);</span>
+    }
+
+    /**
+     * Gets a version of this {@code OptionGroup} converted to a particular type.
+     *
+     * @param optionGroup the option group.
+     * @param &lt;T&gt; The return type for the method.
+     * @return the value parsed into a particular object or null if no option in the OptionGroup is set.
+     * @throws ParseException if there are problems turning the selected option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.9.0
+     */
+    public &lt;T&gt; T getParsedOptionValue(final OptionGroup optionGroup) throws ParseException {
+<span class="fc" id="L611">        return getParsedOptionValue(optionGroup, () -&gt; null);</span>
+    }
+
+    /**
+     * Gets a version of this {@code OptionGroup} converted to a particular type.
+     *
+     * @param optionGroup the option group.
+     * @param defaultValue the default value to return if opt is not set.
+     * @param &lt;T&gt; The return type for the method.
+     * @return the value parsed into a particular object or the defaultValue if no option in the OptionGroup is set.
+     * @throws ParseException if there are problems turning the selected option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.9.0
+     */
+    public &lt;T&gt; T getParsedOptionValue(final OptionGroup optionGroup, final Supplier&lt;T&gt; defaultValue) throws ParseException {
+<span class="fc bfc" id="L626" title="All 4 branches covered.">        if (optionGroup == null || !optionGroup.isSelected()) {</span>
+<span class="fc" id="L627">            return get(defaultValue);</span>
+        }
+<span class="fc" id="L629">        return getParsedOptionValue(optionGroup.getSelected(), defaultValue);</span>
+    }
+
+    /**
+     * Gets a version of this {@code OptionGroup} converted to a particular type.
+     *
+     * @param optionGroup the option group.
+     * @param defaultValue the default value to return if an option is not selected.
+     * @param &lt;T&gt; The return type for the method.
+     * @return the value parsed into a particular object or the defaultValue if no option in the OptionGroup is set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.9.0
+     */
+    public &lt;T&gt; T getParsedOptionValue(final OptionGroup optionGroup, final T defaultValue) throws ParseException {
+<span class="fc" id="L644">        return getParsedOptionValue(optionGroup, () -&gt; defaultValue);</span>
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to a particular type.
+     *
+     * @param optionName the name of the option.
+     * @param &lt;T&gt; The return type for the method.
+     * @return the value parsed into a particular object or null if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.2
+     */
+    public &lt;T&gt; T getParsedOptionValue(final String optionName) throws ParseException {
+<span class="fc" id="L658">        return getParsedOptionValue(resolveOption(optionName));</span>
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to a particular type.
+     *
+     * @param optionName the name of the option.
+     * @param defaultValue the default value to return if opt is not set.
+     * @param &lt;T&gt; The return type for the method.
+     * @return the value parsed into a particular object or the defaultValue if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.7.0
+     */
+    public &lt;T&gt; T getParsedOptionValue(final String optionName, final Supplier&lt;T&gt; defaultValue) throws ParseException {
+<span class="fc" id="L673">        return getParsedOptionValue(resolveOption(optionName), defaultValue);</span>
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to a particular type.
+     *
+     * @param optionName the name of the option.
+     * @param defaultValue the default value to return if opt is not set.
+     * @param &lt;T&gt; The return type for the method.
+     * @return the value parsed into a particular object or the defaultValue if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.7.0
+     */
+    public &lt;T&gt; T getParsedOptionValue(final String optionName, final T defaultValue) throws ParseException {
+<span class="fc" id="L688">        return getParsedOptionValue(resolveOption(optionName), defaultValue);</span>
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to an array of a particular type.
+     *
+     * @param optionChar the name of the option.
+     * @param &lt;T&gt; The array type for the return value.
+     * @return the values parsed into an array of objects or null if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.10.0
+     */
+    public &lt;T&gt; T[] getParsedOptionValues(final char optionChar) throws ParseException {
+<span class="fc" id="L702">        return getParsedOptionValues(String.valueOf(optionChar));</span>
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to an array of a particular type.
+     *
+     * @param optionChar the name of the option.
+     * @param defaultValue the default value to return if opt is not set.
+     * @param &lt;T&gt; The array type for the return value.
+     * @return the values parsed into an array of objects or the defaultValue if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.10.0
+     */
+    public &lt;T&gt; T[] getParsedOptionValues(final char optionChar, final Supplier&lt;T[]&gt; defaultValue) throws ParseException {
+<span class="fc" id="L717">        return getParsedOptionValues(String.valueOf(optionChar), defaultValue);</span>
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to an array of a particular type.
+     *
+     * @param optionChar the name of the option.
+     * @param defaultValue the default value to return if opt is not set.
+     * @param &lt;T&gt; The array type for the return value.
+     * @return the values parsed into an array of objects or the defaultValue if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.10.0
+     */
+    public &lt;T&gt; T[] getParsedOptionValues(final char optionChar, final T[] defaultValue) throws ParseException {
+<span class="fc" id="L732">        return getParsedOptionValues(String.valueOf(optionChar), defaultValue);</span>
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to an array of a particular type.
+     *
+     * @param option the option.
+     * @param &lt;T&gt; The array type for the return value.
+     * @return the values parsed into an array of objects or null if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.10.0
+     */
+    public &lt;T&gt; T[] getParsedOptionValues(final Option option) throws ParseException {
+<span class="fc" id="L746">        return getParsedOptionValues(option, () -&gt; null);</span>
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to an array of a particular type.
+     *
+     * @param option the option.
+     * @param defaultValue the default value to return if opt is not set.
+     * @param &lt;T&gt; The array type for the return value.
+     * @return the values parsed into an array of objects or the defaultValue if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.10.0
+     */
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public &lt;T&gt; T[] getParsedOptionValues(final Option option, final Supplier&lt;T[]&gt; defaultValue) throws ParseException {
+<span class="fc bfc" id="L762" title="All 2 branches covered.">        if (option == null) {</span>
+<span class="fc" id="L763">            return get(defaultValue);</span>
+        }
+<span class="fc" id="L765">        final Class&lt;? extends T&gt; clazz = (Class&lt;? extends T&gt;) option.getType();</span>
+<span class="fc" id="L766">        final String[] values = getOptionValues(option);</span>
+<span class="fc bfc" id="L767" title="All 2 branches covered.">        if (values == null) {</span>
+<span class="fc" id="L768">            return get(defaultValue);</span>
+        }
+<span class="fc" id="L770">        final T[] result = (T[]) Array.newInstance(clazz, values.length);</span>
+        try {
+<span class="fc bfc" id="L772" title="All 2 branches covered.">            for (int i = 0; i &lt; values.length; i++) {</span>
+<span class="fc" id="L773">                result[i] = clazz.cast(option.getConverter().apply(values[i]));</span>
+            }
+<span class="fc" id="L775">            return result;</span>
+<span class="nc" id="L776">        } catch (final Exception t) {</span>
+<span class="nc" id="L777">            throw ParseException.wrap(t);</span>
+        }
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to an array of a particular type.
+     *
+     * @param option the option.
+     * @param defaultValue the default value to return if opt is not set.
+     * @param &lt;T&gt; The array type for the return value.
+     * @return the values parsed into an array of objects or the defaultValue if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.10.0
+     */
+    public &lt;T&gt; T[] getParsedOptionValues(final Option option, final T[] defaultValue) throws ParseException {
+<span class="fc" id="L793">        return getParsedOptionValues(option, () -&gt; defaultValue);</span>
+    }
+
+    /**
+     * Gets a version of this {@code OptionGroup} converted to an array of a particular type.
+     *
+     * @param optionGroup the option group.
+     * @param &lt;T&gt; The array type for the return value.
+     * @return the values parsed into an array of objects or null if no option in the OptionGroup is set.
+     * @throws ParseException if there are problems turning the selected option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.10.0
+     */
+    public &lt;T&gt; T[] getParsedOptionValues(final OptionGroup optionGroup) throws ParseException {
+<span class="fc" id="L807">        return getParsedOptionValues(optionGroup, () -&gt; null);</span>
+    }
+
+    /**
+     * Gets a version of this {@code OptionGroup} converted to an array of a particular type.
+     *
+     * @param optionGroup the option group.
+     * @param defaultValue the default value to return if opt is not set.
+     * @param &lt;T&gt; The array type for the return value.
+     * @return the values parsed into an array of objects or null if no option in the OptionGroup is set.
+     * @throws ParseException if there are problems turning the selected option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.10.0
+     */
+    public &lt;T&gt; T[] getParsedOptionValues(final OptionGroup optionGroup, final Supplier&lt;T[]&gt; defaultValue) throws ParseException {
+<span class="fc bfc" id="L822" title="All 4 branches covered.">        if (optionGroup == null || !optionGroup.isSelected()) {</span>
+<span class="fc" id="L823">            return get(defaultValue);</span>
+        }
+<span class="fc" id="L825">        return getParsedOptionValues(optionGroup.getSelected(), defaultValue);</span>
+    }
+
+    /**
+     * Gets a version of this {@code OptionGroup} converted to an array of a particular type.
+     *
+     * @param optionGroup the option group.
+     * @param defaultValue the default value to return if an option is not selected.
+     * @param &lt;T&gt; The array type for the return value.
+     * @return the values parsed into an array of objects or null if no option in the OptionGroup is set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.10.0
+     */
+    public &lt;T&gt; T[] getParsedOptionValues(final OptionGroup optionGroup, final T[] defaultValue) throws ParseException {
+<span class="fc" id="L840">        return getParsedOptionValues(optionGroup, () -&gt; defaultValue);</span>
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to an array of a particular type.
+     *
+     * @param optionName the name of the option.
+     * @param &lt;T&gt; The array type for the return value.
+     * @return the values parsed into an array of objects or null if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.10.0
+     */
+    public &lt;T&gt; T[] getParsedOptionValues(final String optionName) throws ParseException {
+<span class="fc" id="L854">        return getParsedOptionValues(resolveOption(optionName));</span>
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to an array of a particular type.
+     *
+     * @param optionName the name of the option.
+     * @param defaultValue the default value to return if opt is not set.
+     * @param &lt;T&gt; The array type for the return value.
+     * @return the values parsed into an array of objects or defaultValues if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.10.0
+     */
+    public &lt;T&gt; T[] getParsedOptionValues(final String optionName, final Supplier&lt;T[]&gt; defaultValue) throws ParseException {
+<span class="fc" id="L869">        return getParsedOptionValues(resolveOption(optionName), defaultValue);</span>
+    }
+
+    /**
+     * Gets a version of this {@code Option} converted to an array of a particular type.
+     *
+     * @param optionName the name of the option.
+     * @param defaultValue the default value to return if opt is not set.
+     * @param &lt;T&gt; The array type for the return value.
+     * @return the values parsed into an array of objects or defaultValues if the option is not set.
+     * @throws ParseException if there are problems turning the option value into the desired type
+     * @see PatternOptionBuilder
+     * @since 1.10.0
+     */
+    public &lt;T&gt; T[] getParsedOptionValues(final String optionName, final T[] defaultValue) throws ParseException {
+<span class="fc" id="L884">        return getParsedOptionValues(resolveOption(optionName), defaultValue);</span>
+    }
+
+    /**
+     * Handles deprecated options.
+     *
+     * @param option a deprecated option.
+     */
+    private void handleDeprecated(final Option option) {
+<span class="fc bfc" id="L893" title="All 2 branches covered.">        if (deprecatedHandler != null) {</span>
+<span class="fc" id="L894">            deprecatedHandler.accept(option);</span>
+        }
+<span class="fc" id="L896">    }</span>
+
+    /**
+     * jkeyes - commented out until it is implemented properly
+     * &lt;p&gt;
+     * Dump state, suitable for debugging.
+     * &lt;/p&gt;
+     *
+     * @return Stringified form of this object.
+     */
+
+    /*
+     * public String toString() { StringBuilder buf = new StringBuilder();
+     *
+     * buf.append(&quot;[ CommandLine: [ options: &quot;); buf.append(options.toString()); buf.append(&quot; ] [ args: &quot;);
+     * buf.append(args.toString()); buf.append(&quot; ] ]&quot;);
+     *
+     * return buf.toString(); }
+     */
+
+    /**
+     * Tests to see if an option has been set.
+     *
+     * @param optionChar character name of the option.
+     * @return true if set, false if not.
+     */
+    public boolean hasOption(final char optionChar) {
+<span class="fc" id="L923">        return hasOption(String.valueOf(optionChar));</span>
+    }
+
+    /**
+     * Tests to see if an option has been set.
+     *
+     * @param option the option to check.
+     * @return true if set, false if not.
+     * @since 1.5.0
+     */
+    public boolean hasOption(final Option option) {
+<span class="fc" id="L934">        final boolean result = options.contains(option);</span>
+<span class="fc bfc" id="L935" title="All 4 branches covered.">        if (result &amp;&amp; option.isDeprecated()) {</span>
+<span class="fc" id="L936">            handleDeprecated(option);</span>
+        }
+<span class="fc" id="L938">        return result;</span>
+    }
+
+    /**
+     * Tests to see if an option has been set.
+     *
+     * @param optionGroup the option group to check.
+     * @return true if set, false if not.
+     * @since 1.9.0
+     */
+    public boolean hasOption(final OptionGroup optionGroup) {
+<span class="fc bfc" id="L949" title="All 4 branches covered.">        if (optionGroup == null || !optionGroup.isSelected()) {</span>
+<span class="fc" id="L950">            return false;</span>
+        }
+<span class="fc" id="L952">        return hasOption(optionGroup.getSelected());</span>
+    }
+
+    /**
+     * Tests to see if an option has been set.
+     *
+     * @param optionName Short name of the option.
+     * @return true if set, false if not.
+     */
+    public boolean hasOption(final String optionName) {
+<span class="fc" id="L962">        return hasOption(resolveOption(optionName));</span>
+    }
+
+    /**
+     * Returns an iterator over the Option members of CommandLine.
+     *
+     * @return an {@code Iterator} over the processed {@link Option} members of this {@link CommandLine}.
+     */
+    public Iterator&lt;Option&gt; iterator() {
+<span class="fc" id="L971">        return options.iterator();</span>
+    }
+
+    /**
+     * Parses a list of values as properties.  All odd numbered values are property keys
+     * and even numbered values are property values.  If there are an odd number of values
+     * the last value is assumed to be a boolean with a value of &quot;true&quot;.
+     * @param props the properties to update.
+     * @param values the list of values to parse.
+     */
+    private void processPropertiesFromValues(final Properties props, final List&lt;String&gt; values) {
+<span class="fc bfc" id="L982" title="All 2 branches covered.">        for (int i = 0; i &lt; values.size(); i += 2) {</span>
+<span class="fc bfc" id="L983" title="All 2 branches covered.">            if (i + 1 &lt; values.size()) {</span>
+<span class="fc" id="L984">                props.put(values.get(i), values.get(i + 1));</span>
+            } else {
+<span class="fc" id="L986">                props.put(values.get(i), &quot;true&quot;);</span>
+            }
+        }
+<span class="fc" id="L989">    }</span>
+
+    /**
+     * Retrieves the option object given the long or short option as a String
+     *
+     * @param optionName short or long name of the option, may be null.
+     * @return Canonicalized option.
+     */
+    private Option resolveOption(final String optionName) {
+<span class="fc" id="L998">        final String actual = Util.stripLeadingHyphens(optionName);</span>
+<span class="fc bfc" id="L999" title="All 2 branches covered.">        if (actual != null) {</span>
+<span class="fc bfc" id="L1000" title="All 2 branches covered.">            for (final Option option : options) {</span>
+<span class="fc bfc" id="L1001" title="All 4 branches covered.">                if (actual.equals(option.getOpt()) || actual.equals(option.getLongOpt())) {</span>
+<span class="fc" id="L1002">                    return option;</span>
+                }
+<span class="fc" id="L1004">            }</span>
+        }
+<span class="fc" id="L1006">        return null;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.13.202504020838</span></div></body></html>
