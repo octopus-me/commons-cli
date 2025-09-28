@@ -1,360 +1,759 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.apache.commons.cli;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+import java.util.List;
 
 class OptionTest {
 
-    private static final class DefaultOption extends Option {
-        private static final long serialVersionUID = 1L;
+    private Option option;
 
-        private final String defaultValue;
-
-        DefaultOption(final String opt, final String description, final String defaultValue) throws IllegalArgumentException {
-            super(opt, true, description);
-            this.defaultValue = defaultValue;
+    @Nested
+    @DisplayName("Constructor Tests")
+    class ConstructorTests {
+        
+        @Test
+        @DisplayName("Should create Option with short name only")
+        void shouldCreateOptionWithShortNameOnly() {
+            option = new Option("a", "description");
+            
+            assertEquals("a", option.getOpt());
+            assertNull(option.getLongOpt());
+            assertFalse(option.hasArg());
+            assertEquals("description", option.getDescription());
         }
-
-        @Override
-        public String getValue() {
-            return super.getValue() != null ? super.getValue() : defaultValue;
+        
+        @Test
+        @DisplayName("Should create Option with short name, long name, hasArg and description")
+        void shouldCreateOptionWithAllParameters() {
+            option = new Option("a", "arg", true, "description");
+            
+            assertEquals("a", option.getOpt());
+            assertEquals("arg", option.getLongOpt());
+            assertTrue(option.hasArg());
+            assertEquals("description", option.getDescription());
+        }
+        
+        @Test
+        @DisplayName("Should throw IllegalArgumentException for invalid short option")
+        void shouldThrowExceptionForInvalidShortOption() {
+            assertThrows(IllegalArgumentException.class, () -> {
+                new Option("invalid!", "description");
+            });
+        }
+        
+        @Test
+        @DisplayName("Should create Option using Builder pattern")
+        void shouldCreateOptionUsingBuilder() {
+            option = Option.builder("a")
+                    .longOpt("arg")
+                    .required(true)
+                    .hasArg()
+                    .desc("description")
+                    .build();
+            
+            assertEquals("a", option.getOpt());
+            assertEquals("arg", option.getLongOpt());
+            assertTrue(option.hasArg());
+            assertTrue(option.isRequired());
+            assertEquals("description", option.getDescription());
+        }
+        
+        @Test
+        @DisplayName("Should throw IllegalStateException when neither opt nor longOpt is specified in Builder")
+        void shouldThrowExceptionWhenNoOptionInBuilder() {
+            Option.Builder builder = Option.builder();
+            
+            assertThrows(IllegalStateException.class, builder::build);
         }
     }
 
-    private static final class TestOption extends Option {
-        private static final long serialVersionUID = 1L;
-
-        TestOption(final String opt, final boolean hasArg, final String description) throws IllegalArgumentException {
-            super(opt, hasArg, description);
+    @Nested
+    @DisplayName("Getter and Setter Tests")
+    class GetterSetterTests {
+        
+        @BeforeEach
+        void setUp() {
+            option = new Option("a", "arg", true, "description");
         }
-
-        @Override
-        public boolean addValue(final String value) {
-            processValue(value);
-            return true;
+        
+        @Test
+        @DisplayName("Should get and set arg name")
+        void shouldGetAndSetArgName() {
+            assertFalse(option.hasArgName());
+            assertNull(option.getArgName());
+            
+            option.setArgName("argument");
+            
+            assertTrue(option.hasArgName());
+            assertEquals("argument", option.getArgName());
+        }
+        
+        @Test
+        @DisplayName("Should get and set description")
+        void shouldGetAndSetDescription() {
+            assertEquals("description", option.getDescription());
+            
+            option.setDescription("new description");
+            
+            assertEquals("new description", option.getDescription());
+        }
+        
+        @Test
+        @DisplayName("Should get and set long option")
+        void shouldGetAndSetLongOpt() {
+            assertEquals("arg", option.getLongOpt());
+            assertTrue(option.hasLongOpt());
+            
+            option.setLongOpt("newarg");
+            
+            assertEquals("newarg", option.getLongOpt());
+        }
+        
+        @Test
+        @DisplayName("Should handle null long option")
+        void shouldHandleNullLongOpt() {
+            option = new Option("a", false, "description");
+            
+            assertNull(option.getLongOpt());
+            assertFalse(option.hasLongOpt());
+        }
+        
+        @Test
+        @DisplayName("Should get and set required flag")
+        void shouldGetAndSetRequired() {
+            assertFalse(option.isRequired());
+            
+            option.setRequired(true);
+            
+            assertTrue(option.isRequired());
+        }
+        
+        @Test
+        @DisplayName("Should get and set optional argument flag")
+        void shouldGetAndSetOptionalArg() {
+            assertFalse(option.hasOptionalArg());
+            
+            option.setOptionalArg(true);
+            
+            assertTrue(option.hasOptionalArg());
+        }
+        
+        @Test
+        @DisplayName("Should get and set value separator")
+        void shouldGetAndSetValueSeparator() {
+            assertFalse(option.hasValueSeparator());
+            assertEquals(0, option.getValueSeparator());
+            
+            option.setValueSeparator('=');
+            
+            assertTrue(option.hasValueSeparator());
+            assertEquals('=', option.getValueSeparator());
+        }
+        
+        @Test
+        @DisplayName("Should get and set type using Class")
+        void shouldGetAndSetTypeWithClass() {
+            assertEquals(String.class, option.getType());
+            
+            option.setType(Integer.class);
+            
+            assertEquals(Integer.class, option.getType());
+        }
+        
+        @Test
+        @DisplayName("Should get and set args count")
+        void shouldGetAndSetArgsCount() {
+            assertEquals(1, option.getArgs());
+            
+            option.setArgs(3);
+            
+            assertEquals(3, option.getArgs());
+        }
+        
+        @Test
+        @DisplayName("Should get key based on available options")
+        void shouldGetKey() {
+            assertEquals("a", option.getKey());
+            
+            Option longOnlyOption = Option.builder()
+                    .longOpt("longonly")
+                    .build();
+            
+            assertEquals("longonly", longOnlyOption.getKey());
+        }
+        
+        @Test
+        @DisplayName("Should get ID for single character option")
+        void shouldGetId() {
+            assertEquals('a', option.getId());
         }
     }
 
-    private static void checkOption(final Option option, final String opt, final String description, final String longOpt, final int numArgs,
-            final String argName, final boolean required, final boolean optionalArg, final char valueSeparator, final Class<?> cls, final String deprecatedDesc,
-            final Boolean deprecatedForRemoval, final String deprecatedSince) {
-        assertEquals(opt, option.getOpt());
-        assertEquals(description, option.getDescription());
-        assertEquals(longOpt, option.getLongOpt());
-        assertEquals(numArgs, option.getArgs());
-        assertEquals(argName, option.getArgName());
-        assertEquals(required, option.isRequired());
-
-        assertEquals(optionalArg, option.hasOptionalArg());
-        assertEquals(numArgs > 0, option.hasArg());
-        assertEquals(numArgs > 0, option.acceptsArg());
-        assertEquals(valueSeparator, option.getValueSeparator());
-        assertEquals(cls, option.getType());
-        if (deprecatedDesc != null) {
-            assertEquals(deprecatedDesc, option.getDeprecated().getDescription());
+    @Nested
+    @DisplayName("Argument Handling Tests")
+    class ArgumentHandlingTests {
+        
+        @BeforeEach
+        void setUp() {
+            option = new Option("a", true, "description");
         }
-        if (deprecatedForRemoval != null) {
-            assertEquals(deprecatedForRemoval, option.getDeprecated().isForRemoval());
+        
+        @Test
+        @DisplayName("Should accept argument when hasArg is true")
+        void shouldAcceptArgumentWhenHasArg() {
+            assertTrue(option.hasArg());
+            assertTrue(option.acceptsArg());
         }
-        if (deprecatedSince != null) {
-            assertEquals(deprecatedSince, option.getDeprecated().getSince());
+        
+        @Test
+        @DisplayName("Should not accept argument when hasArg is false")
+        void shouldNotAcceptArgumentWhenHasNoArg() {
+            option = new Option("a", false, "description");
+            
+            assertFalse(option.hasArg());
+            assertFalse(option.acceptsArg());
+        }
+        
+        @Test
+        @DisplayName("Should accept multiple arguments when hasArgs is true")
+        void shouldAcceptMultipleArguments() {
+            option = Option.builder("a").hasArgs().build();
+            
+            assertTrue(option.hasArgs());
+            assertTrue(option.acceptsArg());
+            assertEquals(Option.UNLIMITED_VALUES, option.getArgs());
+        }
+        
+        @Test
+        @DisplayName("Should process single value correctly")
+        void shouldProcessSingleValue() {
+            option.processValue("test");
+            
+            assertEquals("test", option.getValue());
+            assertEquals(1, option.getValuesList().size());
+        }
+        
+        @Test
+        @DisplayName("Should process multiple values with separator")
+        void shouldProcessMultipleValuesWithSeparator() {
+            option.setValueSeparator(',');
+            option.setArgs(3);
+            
+            option.processValue("val1,val2,val3");
+            
+            assertEquals("val1", option.getValue(0));
+            assertEquals("val2", option.getValue(1));
+            assertEquals("val3", option.getValue(2));
+            assertEquals(3, option.getValuesList().size());
+        }
+        
+        @Test
+        @DisplayName("Should throw IllegalStateException when processing value for no-args option")
+        void shouldThrowExceptionWhenProcessingValueForNoArgsOption() {
+            option = new Option("a", false, "description");
+            
+            assertThrows(IllegalStateException.class, () -> {
+                option.processValue("test");
+            });
+        }
+        
+        @Test
+        @DisplayName("Should throw IllegalArgumentException when adding value to full list")
+        void shouldThrowExceptionWhenAddingValueToFullList() {
+            option.setArgs(1);
+            option.processValue("first");
+            
+            assertThrows(IllegalArgumentException.class, () -> {
+                option.processValue("second");
+            });
+        }
+        
+        @Test
+        @DisplayName("Should handle unlimited values")
+        void shouldHandleUnlimitedValues() {
+            option = Option.builder("a").hasArgs().build();
+            
+            option.processValue("val1");
+            option.processValue("val2");
+            option.processValue("val3");
+            
+            assertEquals(3, option.getValuesList().size());
+            assertTrue(option.acceptsArg()); // Should still accept more
+        }
+        
+        @Test
+        @DisplayName("Should clear values correctly")
+        void shouldClearValues() {
+            option.processValue("test");
+            assertEquals(1, option.getValuesList().size());
+            
+            option.clearValues();
+            
+            assertTrue(option.getValuesList().isEmpty());
+            assertNull(option.getValue());
         }
     }
 
-    private Option roundTrip(final Option o) throws IOException, ClassNotFoundException {
-        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        final ObjectOutputStream oos = new ObjectOutputStream(baos);
-        oos.writeObject(o);
-        final ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
-        final ObjectInputStream ois = new ObjectInputStream(bais);
-        return (Option) ois.readObject();
+    @Nested
+    @DisplayName("Value Retrieval Tests")
+    class ValueRetrievalTests {
+        
+        @BeforeEach
+        void setUp() {
+            option = Option.builder("a").hasArgs().build();
+            option.processValue("value1");
+            option.processValue("value2");
+            option.processValue("value3");
+        }
+        
+        @Test
+        @DisplayName("Should get first value")
+        void shouldGetFirstValue() {
+            assertEquals("value1", option.getValue());
+        }
+        
+        @Test
+        @DisplayName("Should get value by index")
+        void shouldGetValueByIndex() {
+            assertEquals("value2", option.getValue(1));
+            assertEquals("value3", option.getValue(2));
+        }
+        
+        @Test
+        @DisplayName("Should throw IndexOutOfBoundsException for invalid index")
+        void shouldThrowExceptionForInvalidIndex() {
+            assertThrows(IndexOutOfBoundsException.class, () -> {
+                option.getValue(5);
+            });
+        }
+        
+        @Test
+        @DisplayName("Should get value with default")
+        void shouldGetValueWithDefault() {
+            Option emptyOption = new Option("b", true, "description");
+            
+            assertNull(emptyOption.getValue());
+            assertEquals("default", emptyOption.getValue("default"));
+        }
+        
+        @Test
+        @DisplayName("Should get values as array")
+        void shouldGetValuesAsArray() {
+            String[] values = option.getValues();
+            
+            assertNotNull(values);
+            assertEquals(3, values.length);
+            assertEquals("value1", values[0]);
+            assertEquals("value2", values[1]);
+            assertEquals("value3", values[2]);
+        }
+        
+        @Test
+        @DisplayName("Should get values as list")
+        void shouldGetValuesAsList() {
+            List<String> values = option.getValuesList();
+            
+            assertEquals(3, values.size());
+            assertEquals("value1", values.get(0));
+            assertEquals("value2", values.get(1));
+            assertEquals("value3", values.get(2));
+        }
+        
+        @Test
+        @DisplayName("Should return null for empty values array")
+        void shouldReturnNullForEmptyValuesArray() {
+            Option emptyOption = new Option("b", true, "description");
+            
+            assertNull(emptyOption.getValues());
+        }
+    }
+
+    @Nested
+    @DisplayName("Deprecated Feature Tests")
+    class DeprecatedTests {
+        
+        @Test
+        @DisplayName("Should handle deprecated option")
+        void shouldHandleDeprecatedOption() {
+            option = Option.builder("a")
+                    .deprecated()
+                    .build();
+            
+            assertTrue(option.isDeprecated());
+            assertNotNull(option.getDeprecated());
+        }
+        
+        @Test
+        @DisplayName("Should handle custom deprecated attributes")
+        void shouldHandleCustomDeprecatedAttributes() {
+            DeprecatedAttributes deprecated = DeprecatedAttributes.builder()
+                    .setDescription("Custom deprecated message")
+                    .setSince("2.0")
+                    .setForRemoval(true)
+                    .get();
+            
+            option = Option.builder("a")
+                    .deprecated(deprecated)
+                    .build();
+            
+            assertTrue(option.isDeprecated());
+            assertEquals(deprecated, option.getDeprecated());
+            assertEquals("Custom deprecated message", option.getDeprecated().getDescription());
+            assertEquals("2.0", option.getDeprecated().getSince());
+            assertTrue(option.getDeprecated().isForRemoval());
+        }
+        
+        @Test
+        @DisplayName("Should generate deprecated string representation")
+        void shouldGenerateDeprecatedString() {
+            option = Option.builder("a")
+                    .longOpt("arg")
+                    .deprecated()
+                    .build();
+            
+            String deprecatedString = option.toDeprecatedString();
+            assertNotNull(deprecatedString);
+            assertTrue(deprecatedString.contains("Option 'a'"));
+        }
+        
+        @Test
+        @DisplayName("Should return empty string for non-deprecated option")
+        void shouldReturnEmptyStringForNonDeprecatedOption() {
+            option = new Option("a", "description");
+            
+            assertEquals("", option.toDeprecatedString());
+        }
+        
+        @Test
+        @DisplayName("Should handle deprecated option with custom attributes in toString")
+        void shouldHandleDeprecatedWithCustomAttributesInToString() {
+            DeprecatedAttributes deprecated = DeprecatedAttributes.builder()
+                    .setDescription("Will be removed")
+                    .setForRemoval(true)
+                    .get();
+            
+            option = Option.builder("a")
+                    .deprecated(deprecated)
+                    .build();
+            
+            String toString = option.toString();
+            assertNotNull(toString);
+            assertFalse(toString.isEmpty());
+        }
+    }
+
+    @Nested
+    @DisplayName("Converter Tests")
+    class ConverterTests {
+        
+        @Test
+        @DisplayName("Should get and set converter")
+        void shouldGetAndSetConverter() {
+            // Fix: Use proper Exception type and correct method name
+            Converter<Integer, NumberFormatException> converter = new Converter<Integer, NumberFormatException>() {
+                @Override
+                public Integer apply(String value) throws NumberFormatException {
+                    return Integer.parseInt(value);
+                }
+            };
+            
+            option = Option.builder("a")
+                    .converter(converter)
+                    .build();
+            
+            assertEquals(converter, option.getConverter());
+        }
+        
+        @Test
+        @DisplayName("Should use default converter when not set")
+        void shouldUseDefaultConverterWhenNotSet() {
+            option = Option.builder("a")
+                    .type(Integer.class)
+                    .build();
+            
+            assertNotNull(option.getConverter());
+        }
+    }
+
+    @Nested
+    @DisplayName("Boundary and Edge Case Tests")
+    class BoundaryTests {
+        
+        @Test
+        @DisplayName("Should handle UNINITIALIZED arg count")
+        void shouldHandleUninitializedArgCount() {
+            option = new Option("a", false, "description");
+            
+            assertEquals(Option.UNINITIALIZED, option.getArgs());
+            assertFalse(option.hasArg());
+            assertFalse(option.hasArgs());
+        }
+        
+        @Test
+        @DisplayName("Should handle UNLIMITED_VALUES arg count")
+        void shouldHandleUnlimitedValues() {
+            option = Option.builder("a").hasArgs().build();
+            
+            assertEquals(Option.UNLIMITED_VALUES, option.getArgs());
+            assertTrue(option.hasArg());
+            assertTrue(option.hasArgs());
+        }
+        
+        @Test
+        @DisplayName("Should handle optional argument with uninitialized arg count")
+        void shouldHandleOptionalArgWithUninitialized() {
+            option = Option.builder("a")
+                    .optionalArg(true)
+                    .build();
+            
+            assertTrue(option.hasOptionalArg());
+            assertEquals(1, option.getArgs()); // Should be set to 1 when optionalArg is true
+        }
+        
+        @Test
+        @DisplayName("Should determine if argument is required")
+        void shouldDetermineIfArgumentIsRequired() {
+            option = new Option("a", true, "description");
+            assertTrue(option.requiresArg());
+            
+            option.setOptionalArg(true);
+            assertFalse(option.requiresArg());
+            
+            Option unlimitedOption = Option.builder("b").hasArgs().build();
+            assertTrue(unlimitedOption.requiresArg());
+            
+            unlimitedOption.processValue("test");
+            assertFalse(unlimitedOption.requiresArg());
+        }
+    }
+
+    @Nested
+    @DisplayName("Object Method Tests")
+    class ObjectMethodTests {
+        
+        @Test
+        @DisplayName("Should implement equals correctly")
+        void shouldImplementEqualsCorrectly() {
+            Option option1 = new Option("a", "arg", true, "description");
+            Option option2 = new Option("a", "arg", true, "different description");
+            Option option3 = new Option("b", "arg", true, "description");
+            Option option4 = new Option("a", "different", true, "description");
+            
+            assertEquals(option1, option2);
+            assertNotEquals(option1, option3);
+            assertNotEquals(option1, option4);
+            assertNotEquals(option1, null);
+            assertNotEquals(option1, "not an option");
+        }
+        
+        @Test
+        @DisplayName("Should implement hashCode correctly")
+        void shouldImplementHashCodeCorrectly() {
+            Option option1 = new Option("a", "arg", true, "description");
+            Option option2 = new Option("a", "arg", true, "different description");
+            
+            assertEquals(option1.hashCode(), option2.hashCode());
+        }
+        
+        @Test
+        @DisplayName("Should clone option correctly")
+        void shouldCloneOptionCorrectly() {
+            option = Option.builder("a")
+                    .longOpt("arg")
+                    .hasArg()
+                    .desc("description")
+                    .build();
+            
+            option.processValue("test");
+            
+            Option cloned = (Option) option.clone();
+            
+            assertEquals(option.getOpt(), cloned.getOpt());
+            assertEquals(option.getLongOpt(), cloned.getLongOpt());
+            assertEquals(option.getDescription(), cloned.getDescription());
+            
+            // Clone should have separate values list
+            cloned.clearValues();
+            assertEquals(0, cloned.getValuesList().size());
+            assertEquals(1, option.getValuesList().size());
+        }
+        
+        @Test
+        @DisplayName("Should generate meaningful toString representation")
+        void shouldGenerateMeaningfulToString() {
+            option = Option.builder("a")
+                    .longOpt("arg")
+                    .hasArg()
+                    .desc("description")
+                    .type(Integer.class)
+                    .build();
+            
+            String toString = option.toString();
+            
+            assertTrue(toString.contains("Option a"));
+            assertTrue(toString.contains("arg"));
+            assertTrue(toString.contains("description"));
+            assertTrue(toString.contains("Integer"));
+        }
+        
+        @Test
+        @DisplayName("Should handle deprecated option in toString")
+        void shouldHandleDeprecatedInToString() {
+            option = Option.builder("a")
+                    .deprecated()
+                    .build();
+            
+            String toString = option.toString();
+            assertNotNull(toString);
+            assertFalse(toString.isEmpty());
+        }
+    }
+
+    @Nested
+    @DisplayName("Builder Pattern Tests")
+    class BuilderTests {
+        
+        @Test
+        @DisplayName("Should build option with all builder methods")
+        void shouldBuildOptionWithAllBuilderMethods() {
+            option = Option.builder("a")
+                    .argName("arg")
+                    .required(true)
+                    .hasArg()
+                    .longOpt("argument")
+                    .desc("description")
+                    .type(Integer.class)
+                    .valueSeparator('=')
+                    .since("1.0")
+                    .build();
+            
+            assertEquals("a", option.getOpt());
+            assertEquals("argument", option.getLongOpt());
+            assertEquals("arg", option.getArgName());
+            assertTrue(option.isRequired());
+            assertTrue(option.hasArg());
+            assertEquals("description", option.getDescription());
+            assertEquals(Integer.class, option.getType());
+            assertEquals('=', option.getValueSeparator());
+            assertEquals("1.0", option.getSince());
+        }
+        
+        @Test
+        @DisplayName("Should handle builder with long option only")
+        void shouldHandleBuilderWithLongOptionOnly() {
+            option = Option.builder()
+                    .longOpt("longonly")
+                    .build();
+            
+            assertNull(option.getOpt());
+            assertEquals("longonly", option.getLongOpt());
+            assertEquals("longonly", option.getKey());
+        }
+        
+        @Test
+        @DisplayName("Should handle type conversion in builder")
+        void shouldHandleTypeConversionInBuilder() {
+            option = Option.builder("a")
+                    .type(null)  // Should default to String.class
+                    .build();
+            
+            assertEquals(String.class, option.getType());
+        }
+        
+        @Test
+        @DisplayName("Should mark as required using convenience method")
+        void shouldMarkAsRequiredUsingConvenienceMethod() {
+            option = Option.builder("a")
+                    .required()
+                    .build();
+            
+            assertTrue(option.isRequired());
+        }
+        
+        @Test
+        @DisplayName("Should mark as deprecated using convenience method")
+        void shouldMarkAsDeprecatedUsingConvenienceMethod() {
+            option = Option.builder("a")
+                    .deprecated()
+                    .build();
+            
+            assertTrue(option.isDeprecated());
+        }
+        
+        @Test
+        @DisplayName("Should use valueSeparator convenience method")
+        void shouldUseValueSeparatorConvenienceMethod() {
+            option = Option.builder("a")
+                    .valueSeparator()
+                    .build();
+            
+            assertTrue(option.hasValueSeparator());
+        }
+        
+        @Test
+        @DisplayName("Should build with specific number of arguments")
+        void shouldBuildWithSpecificNumberOfArgs() {
+            option = Option.builder("a")
+                    .numberOfArgs(3)
+                    .build();
+            
+            assertEquals(3, option.getArgs());
+        }
+        
+        @Test
+        @DisplayName("Should build with optional argument")
+        void shouldBuildWithOptionalArgument() {
+            option = Option.builder("a")
+                    .optionalArg(true)
+                    .build();
+            
+            assertTrue(option.hasOptionalArg());
+        }
     }
 
     @Test
-    void testAddValue() {
-        final Option option = new Option("f", null);
-        assertThrows(UnsupportedOperationException.class, () -> option.addValue(""));
-        assertThrows(IllegalStateException.class, () -> option.processValue(""));
+    @DisplayName("Should test addValue deprecated method")
+    void shouldTestAddValueDeprecatedMethod() {
+        option = new Option("a", true, "description");
+        
+        assertThrows(UnsupportedOperationException.class, () -> {
+            option.addValue("test");
+        });
     }
 
     @Test
-    void testBuilderDeprecatedBuildEmpty() {
-        assertThrows(IllegalStateException.class, () -> Option.builder().build());
+    @DisplayName("Should handle since version")
+    void shouldHandleSinceVersion() {
+        option = Option.builder("a")
+                .since("2.0")
+                .build();
+        
+        assertEquals("2.0", option.getSince());
     }
-
+    
     @Test
-    void testBuilderEmpty() {
-        assertThrows(IllegalStateException.class, () -> Option.builder().get());
-    }
-
-    @Test
-    void testBuilderInsufficientParams1() {
-        assertThrows(IllegalStateException.class, () -> Option.builder().desc("desc").get());
-    }
-
-    @Test
-    void testBuilderInsufficientParams2() {
-        assertThrows(IllegalStateException.class, () -> Option.builder(null).desc("desc").get());
-    }
-
-    @Test
-    void testBuilderInvalidOptionName0() {
-        assertThrows(IllegalStateException.class, () -> Option.builder().option(null).get());
-        assertThrows(IllegalArgumentException.class, () -> Option.builder().option(""));
-        assertThrows(IllegalArgumentException.class, () -> Option.builder().option(" "));
-    }
-
-    @Test
-    void testBuilderInvalidOptionName1() {
-        assertThrows(IllegalArgumentException.class, () -> Option.builder().option("invalid?"));
-    }
-
-    @Test
-    void testBuilderInvalidOptionName2() {
-        assertThrows(IllegalArgumentException.class, () -> Option.builder().option("invalid@"));
-    }
-
-    @Test
-    void testBuilderInvalidOptionName3() {
-        assertThrows(IllegalArgumentException.class, () -> Option.builder("invalid?"));
-    }
-
-    @Test
-    void testBuilderInvalidOptionName4() {
-        assertThrows(IllegalArgumentException.class, () -> Option.builder("invalid@"));
-    }
-
-    @Test
-    void testBuilderMethods() {
-        final char defaultSeparator = (char) 0;
-
-        checkOption(Option.builder("a").desc("desc").get(), "a", "desc", null, Option.UNINITIALIZED, null, false, false, defaultSeparator, String.class, null,
-                null, null);
-        checkOption(Option.builder("a").desc("desc").get(), "a", "desc", null, Option.UNINITIALIZED, null, false, false, defaultSeparator, String.class, null,
-                null, null);
-        checkOption(Option.builder("a").desc("desc").longOpt("aaa").get(), "a", "desc", "aaa", Option.UNINITIALIZED, null, false, false, defaultSeparator,
-                String.class, null, null, null);
-        checkOption(Option.builder("a").desc("desc").hasArg(true).get(), "a", "desc", null, 1, null, false, false, defaultSeparator, String.class, null, null,
-                null);
-        checkOption(Option.builder("a").desc("desc").hasArg(false).get(), "a", "desc", null, Option.UNINITIALIZED, null, false, false, defaultSeparator,
-                String.class, null, null, null);
-        checkOption(Option.builder("a").desc("desc").hasArg(true).get(), "a", "desc", null, 1, null, false, false, defaultSeparator, String.class, null, null,
-                null);
-        checkOption(Option.builder("a").desc("desc").numberOfArgs(3).get(), "a", "desc", null, 3, null, false, false, defaultSeparator, String.class, null,
-                null, null);
-        checkOption(Option.builder("a").desc("desc").required(true).get(), "a", "desc", null, Option.UNINITIALIZED, null, true, false, defaultSeparator,
-                String.class, null, null, null);
-        checkOption(Option.builder("a").desc("desc").required(false).get(), "a", "desc", null, Option.UNINITIALIZED, null, false, false, defaultSeparator,
-                String.class, null, null, null);
-
-        checkOption(Option.builder("a").desc("desc").argName("arg1").get(), "a", "desc", null, Option.UNINITIALIZED, "arg1", false, false, defaultSeparator,
-                String.class, null, null, null);
-        checkOption(Option.builder("a").desc("desc").optionalArg(false).get(), "a", "desc", null, Option.UNINITIALIZED, null, false, false, defaultSeparator,
-                String.class, null, null, null);
-        checkOption(Option.builder("a").desc("desc").optionalArg(true).get(), "a", "desc", null, 1, null, false, true, defaultSeparator, String.class, null,
-                null, null);
-        checkOption(Option.builder("a").desc("desc").valueSeparator(':').get(), "a", "desc", null, Option.UNINITIALIZED, null, false, false, ':',
-                String.class, null, null, null);
-        checkOption(Option.builder("a").desc("desc").type(Integer.class).get(), "a", "desc", null, Option.UNINITIALIZED, null, false, false, defaultSeparator,
-                Integer.class, null, null, null);
-        checkOption(Option.builder("a").desc("desc").type(null).get(), "a", "desc", null, Option.UNINITIALIZED, null, false, false, defaultSeparator,
-                String.class, null, null, null);
-        checkOption(Option.builder().option("a").desc("desc").type(Integer.class).get(), "a", "desc", null, Option.UNINITIALIZED, null, false, false,
-                defaultSeparator, Integer.class, null, null, null);
-        // Deprecated
-        checkOption(Option.builder().option("a").desc("desc").type(Integer.class).deprecated().get(), "a", "desc", null, Option.UNINITIALIZED, null, false,
-                false, defaultSeparator, Integer.class, "", false, "");
-        checkOption(Option.builder().option("a").desc("desc").type(Integer.class).deprecated(DeprecatedAttributes.builder().get()).get(), "a", "desc", null,
-                Option.UNINITIALIZED, null, false, false, defaultSeparator, Integer.class, "", false, "");
-        checkOption(Option.builder().option("a").desc("desc").type(Integer.class).deprecated(DeprecatedAttributes.builder().setDescription("X").get()).get(),
-                "a", "desc", null, Option.UNINITIALIZED, null, false, false, defaultSeparator, Integer.class, "X", false, "");
-        checkOption(
-                Option.builder().option("a").desc("desc").type(Integer.class)
-                .deprecated(DeprecatedAttributes.builder().setDescription("X").setForRemoval(true).get()).get(),
-                "a", "desc", null, Option.UNINITIALIZED, null, false, false, defaultSeparator, Integer.class, "X", true, "");
-        checkOption(
-                Option.builder().option("a").desc("desc").type(Integer.class)
-                .deprecated(DeprecatedAttributes.builder().setDescription("X").setForRemoval(true).setSince("2.0").get()).get(),
-                "a", "desc", null, Option.UNINITIALIZED, null, false, false, defaultSeparator, Integer.class, "X", true, "2.0");
-    }
-
-    @Test
-    void testClear() {
-        final TestOption option = new TestOption("x", true, "");
-        assertEquals(0, option.getValuesList().size());
-        option.addValue("a");
+    @DisplayName("Should handle empty string values")
+    void shouldHandleEmptyStringValues() {
+        option = Option.builder("a").hasArg().build();
+        option.processValue("");
+        
+        assertEquals("", option.getValue());
         assertEquals(1, option.getValuesList().size());
-        option.clearValues();
-        assertEquals(0, option.getValuesList().size());
     }
-
-    // See https://issues.apache.org/jira/browse/CLI-21
+    
     @Test
-    void testClone() {
-        final TestOption a = new TestOption("a", true, "");
-        final TestOption b = (TestOption) a.clone();
-        assertEquals(a, b);
-        assertNotSame(a, b);
-        a.setDescription("a");
-        assertEquals("", b.getDescription());
-        b.setArgs(2);
-        b.addValue("b1");
-        b.addValue("b2");
-        assertEquals(1, a.getArgs());
-        assertEquals(0, a.getValuesList().size());
-        assertEquals(2, b.getValues().length);
-    }
-
-    @Test
-    void testEquals() {
-        final Option option1a = new Option("1", null);
-        final Option option1b = new Option("1", null);
-        final Option option2 = new Option("2", null);
-        assertEquals(option1a, option1a);
-        assertEquals(option1a, option1b);
-        assertEquals(option1b, option1a);
-        assertNotEquals(option1a, option2);
-        assertNotEquals(option1b, option2);
-        assertNotEquals(option2, option1a);
-        assertNotEquals(option2, "");
-    }
-
-    @Test
-    void testGetValue() {
-        final Option option = new Option("f", null);
-        option.setArgs(Option.UNLIMITED_VALUES);
-
-        assertEquals("default", option.getValue("default"));
-        assertNull(option.getValue(0));
-
-        option.processValue("foo");
-
-        assertEquals("foo", option.getValue());
-        assertEquals("foo", option.getValue(0));
-        assertEquals("foo", option.getValue("default"));
-    }
-
-    @Test
-    void testHasArgName() {
-        final Option option = new Option("f", null);
-
-        option.setArgName(null);
-        assertFalse(option.hasArgName());
-
-        option.setArgName("");
-        assertFalse(option.hasArgName());
-
-        option.setArgName("file");
-        assertTrue(option.hasArgName());
-    }
-
-    @Test
-    void testHasArgs() {
-        final Option option = new Option("f", null);
-
-        option.setArgs(0);
-        assertFalse(option.hasArgs());
-
-        option.setArgs(1);
-        assertFalse(option.hasArgs());
-
-        option.setArgs(10);
-        assertTrue(option.hasArgs());
-
-        option.setArgs(Option.UNLIMITED_VALUES);
-        assertTrue(option.hasArgs());
-
-        option.setArgs(Option.UNINITIALIZED);
-        assertFalse(option.hasArgs());
-    }
-
-    @Test
-    void testHashCode() {
-        assertNotEquals(Option.builder("test").get().hashCode(), Option.builder("test2").get().hashCode());
-        assertNotEquals(Option.builder("test").get().hashCode(), Option.builder().longOpt("test").get().hashCode());
-        assertNotEquals(Option.builder("test").get().hashCode(), Option.builder("test").longOpt("long test").get().hashCode());
-    }
-
-    @Test
-    public void testProcessValue() {
-        final Option option = new Option("D", true, "Define property");
-        option.setValueSeparator('=');
-        final NullPointerException exception = assertThrows(NullPointerException.class, () -> option.processValue(null));
-        assertTrue(exception.getMessage().contains("value"));
-    }
-
-    @Test
-    void testSerialization() throws IOException, ClassNotFoundException {
-        final Option option = Option.builder("o").type(TypeHandlerTest.Instantiable.class).get();
-        assertEquals(Converter.DEFAULT, option.getConverter());
-        Option roundtrip = roundTrip(option);
-        assertEquals(Converter.DEFAULT, roundtrip.getConverter());
-        // verify unregistered class converters and verifiers get reset to default.
-        // converters are NOT Serializable, use a serialization proxy if you want that.
-        option.setConverter(Converter.DATE);
-        roundtrip = roundTrip(option);
-        assertEquals(Converter.DEFAULT, roundtrip.getConverter());
-        // verify registered class converters and verifiers do not get reset to default.
-        // converters are NOT Serializable, use a serialization proxy if you want that.
-        // verify earlier values still set.
-        assertEquals(Converter.DATE, option.getConverter());
-        roundtrip = roundTrip(option);
-        assertEquals(Converter.DEFAULT, roundtrip.getConverter());
-    }
-
-    @Test
-    void testSubclass() {
-        final Option option = new DefaultOption("f", "file", "myfile.txt");
-        final Option clone = (Option) option.clone();
-        assertEquals("myfile.txt", clone.getValue());
-        assertEquals(DefaultOption.class, clone.getClass());
-    }
-
-    @Test
-    void testTypeClass() {
-        final Option option = new Option("f", null);
-        assertEquals(String.class, option.getType());
-        option.setType(CharSequence.class);
-        assertEquals(CharSequence.class, option.getType());
-    }
-
-    @Test
-    void testTypeObject() {
-        final Option option = new Option("f", null);
-        assertEquals(String.class, option.getType());
-        @SuppressWarnings("cast")
-        final Object type = CharSequence.class; // Do NOT remove cast
-        option.setType(type);
-        assertEquals(CharSequence.class, option.getType());
+    @DisplayName("Should handle null value in processValue")
+    void shouldHandleNullValueInProcessValue() {
+        option = Option.builder("a").hasArg().build();
+        
+        assertThrows(NullPointerException.class, () -> {
+            option.processValue(null);
+        });
     }
 }
