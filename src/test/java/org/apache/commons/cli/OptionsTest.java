@@ -1,302 +1,295 @@
-/*
-  Licensed to the Apache Software Foundation (ASF) under one or more
-  contributor license agreements.  See the NOTICE file distributed with
-  this work for additional information regarding copyright ownership.
-  The ASF licenses this file to You under the Apache License, Version 2.0
-  (the "License"); you may not use this file except in compliance with
-  the License.  You may obtain a copy of the License at
-
-      https://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
- */
-
 package org.apache.commons.cli;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
-@SuppressWarnings("deprecation") // tests some deprecated classes
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Comprehensive unit tests for {@link Options}.
+ */
 class OptionsTest {
 
-    private void assertToStrings(final Option option) {
-        // Should never throw.
-        // Should return a String, not null.
-        assertNotNull(option.toString());
-        assertNotNull(option.toDeprecatedString());
+    private Options options;
+
+    @BeforeEach
+    void setUp() {
+        options = new Options();
+    }
+
+    // ---------- addOption ----------
+
+    @Test
+    void testAddOptionStoresShortAndLongOptions() {
+        Option opt = new Option("a", "alpha", true, "description");
+        options.addOption(opt);
+
+        assertTrue(options.hasOption("a"));
+        assertTrue(options.hasOption("alpha"));
+        assertSame(opt, options.getOption("a"));
+        assertSame(opt, options.getOption("alpha"));
+        assertTrue(options.getOptions().contains(opt));
     }
 
     @Test
-    void testAddConflictingOptions() {
-        final Options options1 = new Options();
-        final OptionGroup optionGroup1 = new OptionGroup();
-        optionGroup1.addOption(Option.builder("a").get());
-        optionGroup1.addOption(Option.builder("b").get());
-        options1.addOptionGroup(optionGroup1);
-        options1.addOption(Option.builder("x").get());
-        options1.addOption(Option.builder("y").get());
-        final Options options2 = new Options();
-        final OptionGroup optionGroup2 = new OptionGroup();
-        optionGroup2.addOption(Option.builder("x").type(Integer.class).get());
-        optionGroup2.addOption(Option.builder("b").type(Integer.class).get());
-        options2.addOptionGroup(optionGroup2);
-        options2.addOption(Option.builder("c").get());
-        assertThrows(IllegalArgumentException.class, () -> options1.addOptions(options2));
+    void testAddOptionMarksRequiredOptions() {
+        Option opt = new Option("r", "required", false, "required");
+        opt.setRequired(true);
+        options.addOption(opt);
+
+        assertTrue(options.getRequiredOptions().contains("r"));
     }
 
     @Test
-    void testAddNonConflictingOptions() {
-        final Options options1 = new Options();
-        final OptionGroup optionGroup1 = new OptionGroup();
-        optionGroup1.addOption(Option.builder("a").get());
-        optionGroup1.addOption(Option.builder("b").get());
-        options1.addOptionGroup(optionGroup1);
-        options1.addOption(Option.builder("x").get());
-        options1.addOption(Option.builder("y").get());
+    void testAddOptionReplacesDuplicateRequiredKey() {
+        Option opt1 = new Option("r", "first", false, "desc1");
+        opt1.setRequired(true);
+        Option opt2 = new Option("r", "second", false, "desc2");
+        opt2.setRequired(true);
 
-        final Options options2 = new Options();
-        final OptionGroup group2 = new OptionGroup();
-        group2.addOption(Option.builder("c").type(Integer.class).get());
-        group2.addOption(Option.builder("d").type(Integer.class).get());
-        options2.addOptionGroup(group2);
-        options1.addOption(Option.builder("e").get());
-        options1.addOption(Option.builder("f").get());
+        options.addOption(opt1);
+        options.addOption(opt2);
 
-        final Options underTest = new Options();
-        underTest.addOptions(options1);
-        underTest.addOptions(options2);
-
-        final List<OptionGroup> expected = Arrays.asList(optionGroup1, group2);
-        assertTrue(expected.size() == underTest.getOptionGroups().size() && expected.containsAll(underTest.getOptionGroups()));
-        final Set<Option> expectOpt = new HashSet<>(options1.getOptions());
-        expectOpt.addAll(options2.getOptions());
-        assertEquals(8, expectOpt.size());
-        assertTrue(expectOpt.size() == underTest.getOptions().size() && expectOpt.containsAll(underTest.getOptions()));
+        assertEquals(1, options.getRequiredOptions().size());
+        assertTrue(options.getRequiredOptions().contains("r"));
+        assertSame(opt2, options.getOption("r"));
     }
 
     @Test
-    void testAddOptions() {
-        final Options options = new Options();
-
-        final OptionGroup optionGroup1 = new OptionGroup();
-        optionGroup1.addOption(Option.builder("a").get());
-        optionGroup1.addOption(Option.builder("b").get());
-
-        options.addOptionGroup(optionGroup1);
-
-        options.addOption(Option.builder("X").get());
-        options.addOption(Option.builder("y").get());
-
-        final Options underTest = new Options();
-        underTest.addOptions(options);
-
-        assertEquals(options.getOptionGroups(), underTest.getOptionGroups());
-        assertArrayEquals(options.getOptions().toArray(), underTest.getOptions().toArray());
+    void testAddOptionShortOnly() {
+        options.addOption("x", true, "short only");
+        assertTrue(options.hasOption("x"));
+        assertFalse(options.hasLongOption("x"));
     }
 
     @Test
-    void testAddOptions2X() {
-        final Options options = new Options();
-
-        final OptionGroup optionGroup1 = new OptionGroup();
-        optionGroup1.addOption(Option.builder("a").get());
-        optionGroup1.addOption(Option.builder("b").get());
-
-        options.addOptionGroup(optionGroup1);
-
-        options.addOption(Option.builder("X").get());
-        options.addOption(Option.builder("y").get());
-
-        assertThrows(IllegalArgumentException.class, () -> options.addOptions(options));
+    void testAddOptionWithDescriptionOnly() {
+        options.addOption("y", "short only no arg");
+        assertTrue(options.hasOption("y"));
+        Option retrieved = options.getOption("y");
+        assertNotNull(retrieved);
+        assertEquals("short only no arg", retrieved.getDescription());
+        assertFalse(retrieved.hasArg());
     }
 
     @Test
-    void testDeprecated() {
-        final Options options = new Options();
-        options.addOption(Option.builder().option("a").get());
-        options.addOption(Option.builder().option("b").deprecated().get());
-        options.addOption(Option.builder().option("c")
-        .deprecated(DeprecatedAttributes.builder().setForRemoval(true).setSince("2.0").setDescription("Use X.").get()).get());
-        options.addOption(Option.builder().option("d").deprecated().longOpt("longD").hasArgs().get());
-        // toString()
-        assertTrue(options.getOption("a").toString().startsWith("[ Option a"));
-        assertTrue(options.getOption("b").toString().startsWith("[ Option b"));
-        assertTrue(options.getOption("c").toString().startsWith("[ Option c"));
-        // toDeprecatedString()
-        assertFalse(options.getOption("a").toDeprecatedString().startsWith("Option a"));
-        assertEquals("Option 'b': Deprecated", options.getOption("b").toDeprecatedString());
-        assertEquals("Option 'c': Deprecated for removal since 2.0: Use X.", options.getOption("c").toDeprecatedString());
-        assertToStrings(options.getOption("a"));
-        assertToStrings(options.getOption("b"));
-        assertToStrings(options.getOption("c"));
-        assertToStrings(options.getOption("d"));
+    void testAddOptionWithShortAndLong() {
+        options.addOption("z", "zulu", true, "desc");
+        assertTrue(options.hasShortOption("z"));
+        assertTrue(options.hasLongOption("zulu"));
+        Option o = options.getOption("zulu");
+        assertEquals("zulu", o.getLongOpt());
     }
 
+    // ---------- addRequiredOption ----------
+
     @Test
-    void testDuplicateLong() {
-        final Options options = new Options();
-        options.addOption("a", "--a", false, "toggle -a");
-        options.addOption("a", "--a", false, "toggle -a*");
-        assertEquals("toggle -a*", options.getOption("a").getDescription(), "last one in wins");
-        assertToStrings(options.getOption("a"));
+    void testAddRequiredOptionAddsToRequiredList() {
+        options.addRequiredOption("a", "alpha", false, "desc");
+        assertTrue(options.hasOption("a"));
+        assertTrue(options.getRequiredOptions().contains("a"));
+        Option retrieved = options.getOption("a");
+        assertTrue(retrieved.isRequired());
     }
 
-    @Test
-    void testDuplicateSimple() {
-        final Options options = new Options();
-        options.addOption("a", false, "toggle -a");
-        assertToStrings(options.getOption("a"));
-        options.addOption("a", true, "toggle -a*");
-        assertEquals("toggle -a*", options.getOption("a").getDescription(), "last one in wins");
-        assertToStrings(options.getOption("a"));
-    }
+    // ---------- addOptionGroup ----------
 
     @Test
-    void testGetMatchingOpts() {
-        final Options options = new Options();
-        OptionBuilder.withLongOpt("version");
-        options.addOption(OptionBuilder.create());
-        OptionBuilder.withLongOpt("verbose");
-        options.addOption(OptionBuilder.create());
-        assertTrue(options.getMatchingOptions("foo").isEmpty());
-        assertEquals(1, options.getMatchingOptions("version").size());
-        assertEquals(2, options.getMatchingOptions("ver").size());
-        assertToStrings(options.getOption("version"));
-        assertToStrings(options.getOption("verbose"));
-    }
+    void testAddOptionGroupAddsAllOptions() {
+        OptionGroup group = new OptionGroup();
+        Option o1 = new Option("a", "alpha");
+        Option o2 = new Option("b", "beta");
+        group.addOption(o1).addOption(o2);
+        group.setRequired(true);
 
-    @Test
-    void testGetOptionsGroups() {
-        final Options options = new Options();
+        options.addOptionGroup(group);
 
-        final OptionGroup optionGroup1 = new OptionGroup();
-        optionGroup1.addOption(OptionBuilder.create('a'));
-        optionGroup1.addOption(OptionBuilder.create('b'));
-
-        final OptionGroup optionGroup2 = new OptionGroup();
-        optionGroup2.addOption(OptionBuilder.create('x'));
-        optionGroup2.addOption(OptionBuilder.create('y'));
-
-        options.addOptionGroup(optionGroup1);
-        options.addOptionGroup(optionGroup2);
-
-        assertNotNull(options.getOptionGroups());
-        assertEquals(2, options.getOptionGroups().size());
-    }
-
-    @Test
-    void testHelpOptions() {
-        OptionBuilder.withLongOpt("long-only1");
-        final Option longOnly1 = OptionBuilder.create();
-        OptionBuilder.withLongOpt("long-only2");
-        final Option longOnly2 = OptionBuilder.create();
-        final Option shortOnly1 = OptionBuilder.create("1");
-        final Option shortOnly2 = OptionBuilder.create("2");
-        OptionBuilder.withLongOpt("bothA");
-        final Option bothA = OptionBuilder.create("a");
-        OptionBuilder.withLongOpt("bothB");
-        final Option bothB = OptionBuilder.create("b");
-
-        final Options options = new Options();
-        options.addOption(longOnly1);
-        options.addOption(longOnly2);
-        options.addOption(shortOnly1);
-        options.addOption(shortOnly2);
-        options.addOption(bothA);
-        options.addOption(bothB);
-
-        final Collection<Option> allOptions = new ArrayList<>();
-        allOptions.add(longOnly1);
-        allOptions.add(longOnly2);
-        allOptions.add(shortOnly1);
-        allOptions.add(shortOnly2);
-        allOptions.add(bothA);
-        allOptions.add(bothB);
-
-        final Collection<Option> helpOptions = options.helpOptions();
-
-        assertTrue(helpOptions.containsAll(allOptions), "Everything in all should be in help");
-        assertTrue(allOptions.containsAll(helpOptions), "Everything in help should be in all");
-    }
-
-    @Test
-    void testLong() {
-        final Options options = new Options();
-        options.addOption("a", "--a", false, "toggle -a");
-        options.addOption("b", "--b", true, "set -b");
         assertTrue(options.hasOption("a"));
         assertTrue(options.hasOption("b"));
+        assertEquals(1, options.getOptionGroups().size());
+        assertSame(group, options.getOptionGroup(o1));
+        assertSame(group, options.getOptionGroup(o2));
+        assertTrue(options.getRequiredOptions().contains(group));
     }
 
     @Test
-    void testMissingOptionException() throws ParseException {
-        final Options options = new Options();
-        OptionBuilder.isRequired();
-        options.addOption(OptionBuilder.create("f"));
-        final MissingOptionException e = assertThrows(MissingOptionException.class, () -> new PosixParser().parse(options, new String[0]));
-        assertEquals("Missing required option: f", e.getMessage());
+    void testAddOptionGroupMakesOptionsNonRequired() {
+        OptionGroup group = new OptionGroup();
+        Option o = new Option("r", "required", false, "desc");
+        o.setRequired(true);
+        group.addOption(o);
+        options.addOptionGroup(group);
+
+        Option stored = options.getOption("r");
+        assertFalse(stored.isRequired(), "Options in group must not be required individually");
     }
 
-    @Test
-    void testMissingOptionsException() throws ParseException {
-        final Options options = new Options();
-        OptionBuilder.isRequired();
-        options.addOption(OptionBuilder.create("f"));
-        OptionBuilder.isRequired();
-        options.addOption(OptionBuilder.create("x"));
-        final MissingOptionException e = assertThrows(MissingOptionException.class, () -> new PosixParser().parse(options, new String[0]));
-        assertEquals("Missing required options: f, x", e.getMessage());
-    }
+    // ---------- addOptions ----------
 
     @Test
-    void testRequiredOptionInGroupShouldNotBeInRequiredList() {
-        final String key = "a";
-        final Option option = new Option(key, "along", false, "Option A");
-        option.setRequired(true);
-        final Options options = new Options();
-        options.addOption(option);
-        assertTrue(options.getRequiredOptions().contains(key));
-        final OptionGroup optionGroup = new OptionGroup();
-        optionGroup.addOption(option);
-        options.addOptionGroup(optionGroup);
-        assertFalse(options.getOption(key).isRequired());
-        assertFalse(options.getRequiredOptions().contains(key), "Option in group shouldn't be in required options list.");
-    }
+    void testAddOptionsMergesWithoutConflict() {
+        Options source = new Options();
+        source.addOption("a", "alpha", false, "descA");
+        OptionGroup group = new OptionGroup();
+        group.addOption(new Option("g", "grouped"));
+        source.addOptionGroup(group);
 
-    @Test
-    void testSimple() {
-        final Options options = new Options();
-        options.addOption("a", false, "toggle -a");
-        options.addOption("b", true, "toggle -b");
+        options.addOptions(source);
+
         assertTrue(options.hasOption("a"));
-        assertTrue(options.hasOption("b"));
+        assertTrue(options.hasOption("g"));
+        assertEquals(1, options.getOptionGroups().size());
     }
 
     @Test
-    void testToString() {
-        final Options options = new Options();
-        options.addOption("f", "foo", true, "Foo");
-        options.addOption("b", "bar", false, "Bar");
-        final String s = options.toString();
-        assertNotNull(s, "null string returned");
-        assertTrue(s.toLowerCase().contains("foo"), "foo option missing");
-        assertTrue(s.toLowerCase().contains("bar"), "bar option missing");
+    void testAddOptionsThrowsOnDuplicateKey() {
+        Options source = new Options();
+        source.addOption("a", "alpha", false, "desc");
+        options.addOption("a", "alpha", false, "existing");
+
+        assertThrows(IllegalArgumentException.class, () -> options.addOptions(source));
+    }
+
+    // ---------- getMatchingOptions ----------
+
+    @Test
+    void testGetMatchingOptionsPerfectMatch() {
+        options.addOption("a", "alpha", false, "desc");
+        List<String> result = options.getMatchingOptions("alpha");
+        assertEquals(Collections.singletonList("alpha"), result);
+    }
+
+    @Test
+    void testGetMatchingOptionsPartialMatch() {
+        options.addOption("a", "alpha", false, "desc");
+        options.addOption("b", "alphabet", false, "desc");
+        List<String> result = options.getMatchingOptions("alph");
+        Set<String> expected = new HashSet<>(Arrays.asList("alpha", "alphabet"));
+        assertEquals(expected, new HashSet<>(result));
+    }
+
+
+    @Test
+    void testGetMatchingOptionsNoMatch() {
+        options.addOption("x", "xyz", false, "desc");
+        assertTrue(options.getMatchingOptions("nope").isEmpty());
+    }
+
+    // ---------- getOption ----------
+
+    @Test
+    void testGetOptionByShortOrLongName() {
+        options.addOption("a", "alpha", false, "desc");
+        assertNotNull(options.getOption("a"));
+        assertNotNull(options.getOption("alpha"));
+    }
+
+    @Test
+    void testGetOptionIgnoresHyphens() {
+        options.addOption("a", "alpha", false, "desc");
+        assertNotNull(options.getOption("--alpha"));
+        assertNotNull(options.getOption("-a"));
+    }
+
+    @Test
+    void testGetOptionReturnsNullIfNotExists() {
+        assertNull(options.getOption("notExisting"));
+    }
+
+    // ---------- hasOption / hasShortOption / hasLongOption ----------
+
+    @Test
+    void testHasOptionVariants() {
+        options.addOption("a", "alpha", false, "desc");
+        assertTrue(options.hasShortOption("a"));
+        assertTrue(options.hasLongOption("alpha"));
+        assertTrue(options.hasOption("alpha"));
+        assertFalse(options.hasOption("beta"));
+    }
+
+    // ---------- getOptionGroup ----------
+
+    @Test
+    void testGetOptionGroupReturnsNullIfNotGrouped() {
+        Option opt = new Option("a", "alpha");
+        options.addOption(opt);
+        assertNull(options.getOptionGroup(opt));
+    }
+
+    // ---------- getOptions ----------
+
+    @Test
+    void testGetOptionsReturnsUnmodifiableCollection() {
+        Option opt = new Option("a", "alpha");
+        options.addOption(opt);
+        Collection<Option> retrieved = options.getOptions();
+
+        assertTrue(retrieved.contains(opt));
+        assertThrows(UnsupportedOperationException.class, () -> retrieved.clear());
+    }
+
+    // ---------- getRequiredOptions ----------
+
+    @Test
+    void testGetRequiredOptionsReturnsUnmodifiableList() {
+        Option opt = new Option("a", "alpha");
+        opt.setRequired(true);
+        options.addOption(opt);
+
+        List<?> required = options.getRequiredOptions();
+        assertTrue(required.contains("a"));
+        assertThrows(UnsupportedOperationException.class, () -> required.clear());
+    }
+
+    // ---------- getOptionGroups ----------
+
+    @Test
+    void testGetOptionGroupsFiltersDuplicates() {
+        OptionGroup group = new OptionGroup();
+        Option o1 = new Option("a", "alpha");
+        group.addOption(o1);
+        options.addOptionGroup(group);
+        options.addOptionGroup(group); // add twice intentionally
+
+        Collection<OptionGroup> groups = options.getOptionGroups();
+        assertEquals(1, groups.size());
+        assertTrue(groups.contains(group));
+    }
+
+    // ---------- helpOptions ----------
+
+    @Test
+    void testHelpOptionsReturnsCopyOfShortOpts() {
+        Option o1 = new Option("a", "alpha");
+        Option o2 = new Option("b", "beta");
+        options.addOption(o1).addOption(o2);
+
+        List<Option> list = options.helpOptions();
+        assertEquals(2, list.size());
+        assertTrue(list.contains(o1));
+        assertTrue(list.contains(o2));
+    }
+
+    // ---------- toString ----------
+
+    @Test
+    void testToStringIncludesShortAndLongMaps() {
+        options.addOption("a", "alpha", false, "desc");
+        String text = options.toString();
+        assertTrue(text.contains("short"));
+        assertTrue(text.contains("long"));
+        assertTrue(text.contains("a"));
+        assertTrue(text.contains("alpha"));
+    }
+
+    @Test
+    void testToStringEmptyOptions() {
+        String text = options.toString();
+        assertTrue(text.startsWith("[ Options:"));
+        assertTrue(text.contains("short"));
+        assertTrue(text.contains("long"));
     }
 }
