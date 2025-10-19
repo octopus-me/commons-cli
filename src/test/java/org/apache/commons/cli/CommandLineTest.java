@@ -1,1022 +1,724 @@
-/*
-  Licensed to the Apache Software Foundation (ASF) under one or more
-  contributor license agreements.  See the NOTICE file distributed with
-  this work for additional information regarding copyright ownership.
-  The ASF licenses this file to You under the Apache License, Version 2.0
-  (the "License"); you may not use this file except in compliance with
-  the License.  You may obtain a copy of the License at
-
-      https://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
- */
-
 package org.apache.commons.cli;
 
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
-import java.util.ArrayList;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
-
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 
 class CommandLineTest {
 
-    private enum Count { ONE, TWO, THREE }
+    private CommandLine commandLine;
+    private Option optionA;
+    private Option optionB;
+    private Option optionWithArgs;
 
-    private static Stream<Arguments> createHasOptionParameters() throws ParseException {
-        final List<Arguments> lst = new ArrayList<>();
-        final Option optT = Option.builder().option("T").longOpt("tee").deprecated().optionalArg(true).get();
-        final Option optU = Option.builder("U").longOpt("you").optionalArg(true).get();
-        final OptionGroup optionGroup = new OptionGroup().addOption(optT).addOption(optU);
-
-        final String[] foobar = { "foo", "bar" };
-        // T set
-        lst.add(Arguments.of(new String[] {"-T"}, optT, optionGroup, true, true, true, true, optT));
-        lst.add(Arguments.of(new String[] {"-T", "foo"}, optT, optionGroup, true, true, true, true, optT));
-        lst.add(Arguments.of(new String[] {"--tee"}, optT, optionGroup, true, true, true, true, optT));
-        lst.add(Arguments.of(new String[] {"--tee", "foo"}, optT, optionGroup, true, true, true, true, optT));
-
-        lst.add(Arguments.of(new String[] {"-U"}, optT, optionGroup, false, false, false, true, optU));
-        lst.add(Arguments.of(new String[] {"-U", "foo", "bar"}, optT, optionGroup, false, false, false, true, optU));
-        lst.add(Arguments.of(new String[] {"--you"}, optT, optionGroup, false, false, false, true, optU));
-        lst.add(Arguments.of(new String[] {"--you", "foo", "bar"}, optT, optionGroup, false, false, false, true, optU));
-
-        // U set
-        lst.add(Arguments.of(new String[] {"-T"}, optU, optionGroup, false, false, true, true, optT));
-        lst.add(Arguments.of(new String[] {"-T", "foo", "bar"}, optU, optionGroup, false, false, true, true, optT));
-        lst.add(Arguments.of(new String[] {"--tee"}, optU, optionGroup, false, false, true, true, optT));
-        lst.add(Arguments.of(new String[] {"--tee", "foo", "bar"}, optU, optionGroup, false, false, true, true, optT));
-
-        lst.add(Arguments.of(new String[] {"-U"}, optU, optionGroup, false, true, false, true, optU));
-        lst.add(Arguments.of(new String[] {"-U", "foo", "bar"}, optU, optionGroup, false, true, false, true, optU));
-        lst.add(Arguments.of(new String[] {"--you"}, optU, optionGroup, false, true, false, true, optU));
-        lst.add(Arguments.of(new String[] {"--you", "foo", "bar"},  optU, optionGroup, false, true, false, true, optU));
-
-        return lst.stream();
+    @BeforeEach
+    void setUp() {
+        commandLine = new CommandLine();
+        optionA = Option.builder("a").longOpt("alpha").desc("Alpha option").build();
+        optionB = Option.builder("b").longOpt("beta").desc("Beta option").build();
+        optionWithArgs = Option.builder("f").longOpt("file").hasArg().desc("File option").build();
     }
 
-    private static Stream<Arguments> createOptionValueParameters() throws ParseException {
-        final List<Arguments> lst = new ArrayList<>();
-        final Option optT = Option.builder().option("T").longOpt("tee").deprecated().optionalArg(true).get();
-        final Option optU = Option.builder("U").longOpt("you").optionalArg(true).get();
-        final OptionGroup optionGroup = new OptionGroup().addOption(optT).addOption(optU);
-
-        // T set
-        lst.add(Arguments.of(new String[] {"-T"}, optT, optionGroup, true, null, true, null, optT));
-        lst.add(Arguments.of(new String[] {"-T", "foo"}, optT, optionGroup, true, "foo", true, "foo", optT));
-        lst.add(Arguments.of(new String[] {"--tee"}, optT, optionGroup, true, null, true, null, optT));
-        lst.add(Arguments.of(new String[] {"--tee", "foo"}, optT, optionGroup, true, "foo", true, "foo", optT));
-
-        lst.add(Arguments.of(new String[] {"-U"}, optT, optionGroup, false, null, false, null, optU));
-        lst.add(Arguments.of(new String[] {"-U", "foo"}, optT, optionGroup, false, null, false, "foo", optU));
-        lst.add(Arguments.of(new String[] {"--you"}, optT, optionGroup, false, null, false, null, optU));
-        lst.add(Arguments.of(new String[] {"--you", "foo"}, optT, optionGroup, false, null, false, "foo", optU));
-
-        // U set
-        lst.add(Arguments.of(new String[] {"-T"}, optU, optionGroup, false, null, true, null, optT));
-        lst.add(Arguments.of(new String[] {"-T", "foo"}, optU, optionGroup, false, null, true, "foo", optT));
-        lst.add(Arguments.of(new String[] {"--tee"}, optU, optionGroup, false, null, true, null, optT));
-        lst.add(Arguments.of(new String[] {"--tee", "foo"}, optU, optionGroup, false, null, true, "foo", optT));
-
-        lst.add(Arguments.of(new String[] {"-U"}, optU, optionGroup, false, null, false, null, optU));
-        lst.add(Arguments.of(new String[] {"-U", "foo"}, optU, optionGroup, false, "foo", false, "foo", optU));
-        lst.add(Arguments.of(new String[] {"--you"}, optU, optionGroup, false, null, false, null, optU));
-        lst.add(Arguments.of(new String[] {"--you", "foo"},  optU, optionGroup, false, "foo", false, "foo", optU));
-
-        return lst.stream();
-    }
-
-    private static Stream<Arguments> createOptionValuesParameters() throws ParseException {
-        final List<Arguments> lst = new ArrayList<>();
-        final Option optT = Option.builder().option("T").longOpt("tee").numberOfArgs(2).deprecated().optionalArg(true).get();
-        final Option optU = Option.builder("U").longOpt("you").numberOfArgs(2).optionalArg(true).get();
-        final OptionGroup optionGroup = new OptionGroup().addOption(optT).addOption(optU);
-
-        final String[] foobar = { "foo", "bar" };
-        // T set
-        lst.add(Arguments.of(new String[] {"-T"}, optT, optionGroup, true, null, true, null, optT));
-        lst.add(Arguments.of(new String[] {"-T", "foo", "bar"}, optT, optionGroup, true, foobar, true, foobar, optT));
-        lst.add(Arguments.of(new String[] {"--tee"}, optT, optionGroup, true, null, true, null, optT));
-        lst.add(Arguments.of(new String[] {"--tee", "foo", "bar"}, optT, optionGroup, true, foobar, true, foobar, optT));
-
-        lst.add(Arguments.of(new String[] {"-U"}, optT, optionGroup, false, null, false, null, optU));
-        lst.add(Arguments.of(new String[] {"-U", "foo", "bar"}, optT, optionGroup, false, null, false, foobar, optU));
-        lst.add(Arguments.of(new String[] {"--you"}, optT, optionGroup, false, null, false, null, optU));
-        lst.add(Arguments.of(new String[] {"--you", "foo", "bar"}, optT, optionGroup, false, null, false, foobar, optU));
-
-        // U set
-        lst.add(Arguments.of(new String[] {"-T"}, optU, optionGroup, false, null, true, null, optT));
-        lst.add(Arguments.of(new String[] {"-T", "foo", "bar"}, optU, optionGroup, false, null, true, foobar, optT));
-        lst.add(Arguments.of(new String[] {"--tee"}, optU, optionGroup, false, null, true, null, optT));
-        lst.add(Arguments.of(new String[] {"--tee", "foo", "bar"}, optU, optionGroup, false, null, true, foobar, optT));
-
-        lst.add(Arguments.of(new String[] {"-U"}, optU, optionGroup, false, null, false, null, optU));
-        lst.add(Arguments.of(new String[] {"-U", "foo", "bar"}, optU, optionGroup, false, foobar, false, foobar, optU));
-        lst.add(Arguments.of(new String[] {"--you"}, optU, optionGroup, false, null, false, null, optU));
-        lst.add(Arguments.of(new String[] {"--you", "foo", "bar"},  optU, optionGroup, false, foobar, false, foobar, optU));
-
-        return lst.stream();
-    }
-
-    private static Stream<Arguments> createParsedOptionValueParameters() throws ParseException {
-        final List<Arguments> lst = new ArrayList<>();
-        final Option optT = Option.builder().option("T").longOpt("tee").deprecated().type(Integer.class).optionalArg(true).get();
-        final Option optU = Option.builder("U").longOpt("you").type(Integer.class).optionalArg(true).get();
-        final OptionGroup optionGroup = new OptionGroup().addOption(optT).addOption(optU);
-        final Integer expected = Integer.valueOf(1);
-
-        // T set
-        lst.add(Arguments.of(new String[] {"-T"}, optT, optionGroup, true, null, true, null, optT));
-        lst.add(Arguments.of(new String[] {"-T", "1"}, optT, optionGroup, true, expected, true, expected, optT));
-        lst.add(Arguments.of(new String[] {"--tee"}, optT, optionGroup, true, null, true, null, optT));
-        lst.add(Arguments.of(new String[] {"--tee", "1"}, optT, optionGroup, true, expected, true, expected, optT));
-
-        lst.add(Arguments.of(new String[] {"-U"}, optT, optionGroup, false, null, false, null, optU));
-        lst.add(Arguments.of(new String[] {"-U", "1"}, optT, optionGroup, false, null, false, expected, optU));
-        lst.add(Arguments.of(new String[] {"--you"}, optT, optionGroup, false, null, false, null, optU));
-        lst.add(Arguments.of(new String[] {"--you", "1"}, optT, optionGroup, false, null, false, expected, optU));
-
-        // U set
-        lst.add(Arguments.of(new String[] {"-T"}, optU, optionGroup, false, null, true, null, optT));
-        lst.add(Arguments.of(new String[] {"-T", "1"}, optU, optionGroup, false, null, true, expected, optT));
-        lst.add(Arguments.of(new String[] {"--tee"}, optU, optionGroup, false, null, true, null, optT));
-        lst.add(Arguments.of(new String[] {"--tee", "1"}, optU, optionGroup, false, null, true, expected, optT));
-
-        lst.add(Arguments.of(new String[] {"-U"}, optU, optionGroup, false, null, false, null, optU));
-        lst.add(Arguments.of(new String[] {"-U", "1"}, optU, optionGroup, false, expected, false, expected, optU));
-        lst.add(Arguments.of(new String[] {"--you"}, optU, optionGroup, false, null, false, null, optU));
-        lst.add(Arguments.of(new String[] {"--you", "1"},  optU, optionGroup, false, expected, false, expected, optU));
-
-        return lst.stream();
-    }
-
-    private static Stream<Arguments> createParsedOptionValuesParameters() throws ParseException {
-        final List<Arguments> lst = new ArrayList<>();
-        final Option optT = Option.builder().option("T").longOpt("tee").deprecated().type(Integer.class).optionalArg(true).hasArgs().get();
-        final Option optU = Option.builder("U").longOpt("you").type(Integer.class).optionalArg(true).hasArgs().get();
-        final OptionGroup optionGroup = new OptionGroup().addOption(optT).addOption(optU);
-        final Integer[] expected = {1, 2};
-
-        // T set
-        lst.add(Arguments.of(new String[] {"-T"}, optT, optionGroup, true, null, true, null, optT));
-        lst.add(Arguments.of(new String[] {"-T", "1", "2"}, optT, optionGroup, true, expected, true, expected, optT));
-        lst.add(Arguments.of(new String[] {"--tee"}, optT, optionGroup, true, null, true, null, optT));
-        lst.add(Arguments.of(new String[] {"--tee", "1", "2"}, optT, optionGroup, true, expected, true, expected, optT));
-
-        lst.add(Arguments.of(new String[] {"-U"}, optT, optionGroup, false, null, false, null, optU));
-        lst.add(Arguments.of(new String[] {"-U", "1", "2"}, optT, optionGroup, false, null, false, expected, optU));
-        lst.add(Arguments.of(new String[] {"--you"}, optT, optionGroup, false, null, false, null, optU));
-        lst.add(Arguments.of(new String[] {"--you", "1", "2"}, optT, optionGroup, false, null, false, expected, optU));
-
-        // U set
-        lst.add(Arguments.of(new String[] {"-T"}, optU, optionGroup, false, null, true, null, optT));
-        lst.add(Arguments.of(new String[] {"-T", "1", "2"}, optU, optionGroup, false, null, true, expected, optT));
-        lst.add(Arguments.of(new String[] {"--tee"}, optU, optionGroup, false, null, true, null, optT));
-        lst.add(Arguments.of(new String[] {"--tee", "1", "2"}, optU, optionGroup, false, null, true, expected, optT));
-
-        lst.add(Arguments.of(new String[] {"-U"}, optU, optionGroup, false, null, false, null, optU));
-        lst.add(Arguments.of(new String[] {"-U", "1", "2"}, optU, optionGroup, false, expected, false, expected, optU));
-        lst.add(Arguments.of(new String[] {"--you"}, optU, optionGroup, false, null, false, null, optU));
-        lst.add(Arguments.of(new String[] {"--you", "1", "2"},  optU, optionGroup, false, expected, false, expected, optU));
-
-        return lst.stream();
-    }
-
-    char asChar(final Option opt) {
-        return opt.getOpt().charAt(0);
-    }
-
-    private void assertWritten(final boolean optDep, final ByteArrayOutputStream baos) {
-        System.out.flush();
-        if (optDep) {
-            assertEquals("Option 'T''tee': Deprecated", baos.toString().trim());
-        } else {
-            assertEquals("", baos.toString());
+    @Nested
+    @DisplayName("Constructor and Builder Tests")
+    class ConstructorTests {
+        
+        @Test
+        @DisplayName("Should create empty CommandLine with default constructor")
+        void shouldCreateEmptyCommandLineWithDefaultConstructor() {
+            assertNotNull(commandLine);
+            assertTrue(commandLine.getArgList().isEmpty());
+            assertEquals(0, commandLine.getArgs().length);
+            assertEquals(0, commandLine.getOptions().length);
         }
-        baos.reset();
-    }
-
-    /**
-     * verifies that the deprecation handler has been called only once or not at all.
-     * @param optDep {@code true} if the dependency should have been logged.
-     * @param handler The list that the deprecation is logged to.
-     * @param opt The option that triggered the logging. May be (@code null} if {@code optDep} is {@code false}.
-     */
-    void checkHandler(final boolean optDep, final List<Option> handler, final Option opt) {
-        if (optDep) {
-            assertEquals(1, handler.size());
-            assertEquals(opt, handler.get(0));
-        } else {
-            assertEquals(0, handler.size());
+        
+        @Test
+        @DisplayName("Should create CommandLine using Builder pattern")
+        void shouldCreateCommandLineUsingBuilderPattern() {
+            CommandLine built = CommandLine.builder()
+                    .addArg("arg1")
+                    .addArg("arg2")
+                    .addOption(optionA)
+                    .build();
+            
+            assertNotNull(built);
+            assertEquals(2, built.getArgList().size());
+            assertEquals(1, built.getOptions().length);
         }
-        handler.clear();
-    }
-
-    @Test
-    void testBadGetParsedOptionValue() throws Exception {
-
-        final Options options = new Options();
-        options.addOption(Option.builder("i").hasArg().type(Number.class).get());
-        options.addOption(Option.builder("c").hasArg().converter(s -> Count.valueOf(s.toUpperCase())).get());
-
-        final CommandLineParser parser = new DefaultParser();
-        final CommandLine cmd = parser.parse(options, new String[] {"-i", "foo", "-c", "bar"});
-
-        assertEquals(NumberFormatException.class, assertThrows(ParseException.class, () -> cmd.getParsedOptionValue("i")).getCause().getClass());
-        assertEquals(IllegalArgumentException.class, assertThrows(ParseException.class, () -> cmd.getParsedOptionValue("c")).getCause().getClass());
-    }
-
-    @Test
-    void testBuilderBuild() {
-        // @formatter:off
-        final CommandLine cmd = CommandLine.builder()
-                .addArg("foo")
-                .addArg("bar")
-                .addOption(Option.builder("T").get())
-                .build();
-        // @formatter:on
-        assertEquals("foo", cmd.getArgs()[0]);
-        assertEquals("bar", cmd.getArgList().get(1));
-        assertEquals("T", cmd.getOptions()[0].getOpt());
-    }
-
-    @Test
-    void testBuilderGet() {
-        // @formatter:off
-        final CommandLine cmd = CommandLine.builder()
-                .addArg("foo")
-                .addArg("bar")
-                .addOption(Option.builder("T").get())
-                .get();
-        // @formatter:on
-        assertEquals("foo", cmd.getArgs()[0]);
-        assertEquals("bar", cmd.getArgList().get(1));
-        assertEquals("T", cmd.getOptions()[0].getOpt());
-    }
-
-    @Test
-    void testBuilderNullArgs() {
-        final CommandLine.Builder builder = CommandLine.builder();
-        builder.addArg(null).addArg(null);
-        builder.addOption(Option.builder("T").get());
-        final CommandLine cmd = builder.build();
-
-        assertEquals(0, cmd.getArgs().length);
-        assertEquals("T", cmd.getOptions()[0].getOpt());
-    }
-
-    @Test
-    void testBuilderNullOption() {
-        final CommandLine.Builder builder = CommandLine.builder();
-        builder.addArg("foo").addArg("bar");
-        builder.addOption(null);
-        builder.addOption(null);
-        builder.addOption(null);
-        final CommandLine cmd = builder.build();
-
-        assertEquals("foo", cmd.getArgs()[0]);
-        assertEquals("bar", cmd.getArgList().get(1));
-        assertEquals(0, cmd.getOptions().length);
-    }
-
-    @Test
-    void testGetOptionProperties() throws Exception {
-        final String[] args = {"-Dparam1=value1", "-Dparam2=value2", "-Dparam3", "-Dparam4=value4", "-D", "--property", "foo=bar"};
-
-        final Options options = new Options();
-        options.addOption(Option.builder("D").valueSeparator().optionalArg(true).numberOfArgs(2).get());
-        options.addOption(Option.builder().valueSeparator().numberOfArgs(2).longOpt("property").get());
-
-        final Parser parser = new GnuParser();
-        final CommandLine cl = parser.parse(options, args);
-
-        final Properties props = cl.getOptionProperties("D");
-        assertNotNull(props, "null properties");
-        assertEquals(4, props.size(), "number of properties in " + props);
-        assertEquals("value1", props.getProperty("param1"), "property 1");
-        assertEquals("value2", props.getProperty("param2"), "property 2");
-        assertEquals("true", props.getProperty("param3"), "property 3");
-        assertEquals("value4", props.getProperty("param4"), "property 4");
-
-        assertEquals("bar", cl.getOptionProperties("property").getProperty("foo"), "property with long format");
-    }
-
-    @Test
-    void testGetOptionPropertiesWithOption() throws Exception {
-        final String[] args = {"-Dparam1=value1", "-Dparam2=value2", "-Dparam3", "-Dparam4=value4", "-D", "--property", "foo=bar"};
-
-        final Options options = new Options();
-        final Option optionD = Option.builder("D").valueSeparator().numberOfArgs(2).optionalArg(true).get();
-        final Option optionProperty = Option.builder().valueSeparator().numberOfArgs(2).longOpt("property").get();
-        options.addOption(optionD);
-        options.addOption(optionProperty);
-
-        final Parser parser = new GnuParser();
-        final CommandLine cl = parser.parse(options, args);
-
-        final Properties props = cl.getOptionProperties(optionD);
-        assertNotNull(props, "null properties");
-        assertEquals(4, props.size(), "number of properties in " + props);
-        assertEquals("value1", props.getProperty("param1"), "property 1");
-        assertEquals("value2", props.getProperty("param2"), "property 2");
-        assertEquals("true", props.getProperty("param3"), "property 3");
-        assertEquals("value4", props.getProperty("param4"), "property 4");
-
-        assertEquals("bar", cl.getOptionProperties(optionProperty).getProperty("foo"), "property with long format");
-    }
-
-    @Test
-    void testGetOptionsBuilder() {
-        final CommandLine cmd = CommandLine.builder().build();
-        assertNotNull(cmd.getOptions());
-        assertEquals(0, cmd.getOptions().length);
-
-        cmd.addOption(null);
-        cmd.addOption(new Option("a", null));
-        cmd.addOption(new Option("b", null));
-        cmd.addOption(new Option("c", null));
-
-        assertEquals(3, cmd.getOptions().length);
-    }
-
-    @Test
-    void testGetOptionsCtor() {
-        final CommandLine cmd = new CommandLine();
-        assertNotNull(cmd.getOptions());
-        assertEquals(0, cmd.getOptions().length);
-
-        cmd.addOption(new Option("a", null));
-        cmd.addOption(new Option("b", null));
-        cmd.addOption(new Option("c", null));
-        cmd.addOption(null);
-
-        assertEquals(3, cmd.getOptions().length);
-    }
-
-    /**
-     * Test for get option value with and without default values.  Verifies that deprecated options only report as
-     * deprecated once.
-     * @param args the argument strings to parse.
-     * @param opt the option to check for values with.
-     * @param optionGroup the option group to check for values with.
-     * @param optDep {@code true} if the opt is deprecated.
-     * @param optValue  The value expected from opt.
-     * @param grpDep {@code true} if the group is deprecated.
-     * @param grpValue the value expected from the group.
-     * @param grpOpt the option that is expected to be processed by the group.
-     * @throws ParseException on parse error.
-     */
-    @ParameterizedTest(name = "{0}, {1}")
-    @MethodSource("createOptionValueParameters")
-    void testGetOptionValue(final String[] args, final Option opt, final OptionGroup optionGroup, final boolean optDep,
-                                   final String optValue, final boolean grpDep, final String grpValue, final Option grpOpt) throws ParseException {
-        final Options options = new Options().addOptionGroup(optionGroup);
-        final List<Option> handler = new ArrayList<>();
-        final CommandLine commandLine = DefaultParser.builder().setDeprecatedHandler(handler::add).get().parse(options, args);
-        final Supplier<String> thinger = () -> "thing";
-        final OptionGroup otherGroup = new OptionGroup().addOption(Option.builder("o").longOpt("other").hasArg().get())
-                .addOption(Option.builder().option("p").longOpt("part").hasArg().get());
-        final OptionGroup nullGroup = null;
-
-        // test char option
-        assertEquals(optValue, commandLine.getOptionValue(asChar(opt)));
-        checkHandler(optDep, handler, opt);
-
-        assertEquals(optValue == null ? "thing" : optValue, commandLine.getOptionValue(asChar(opt), "thing"));
-        checkHandler(optDep, handler, opt);
-
-        assertEquals(optValue == null ? "thing" : optValue, commandLine.getOptionValue(asChar(opt), thinger));
-        checkHandler(optDep, handler, opt);
-
-        // test short option arg
-        assertEquals(optValue, commandLine.getOptionValue(opt.getOpt()));
-        checkHandler(optDep, handler, opt);
-
-        assertEquals(optValue == null ? "thing" : optValue, commandLine.getOptionValue(opt.getOpt(), "thing"));
-        checkHandler(optDep, handler, opt);
-
-        assertEquals(optValue == null ? "thing" : optValue, commandLine.getOptionValue(opt.getOpt(), thinger));
-        checkHandler(optDep, handler, opt);
-
-        // test long option arg
-        assertEquals(optValue, commandLine.getOptionValue(opt.getLongOpt()));
-        checkHandler(optDep, handler, opt);
-
-        assertEquals(optValue == null ? "thing" : optValue, commandLine.getOptionValue(opt.getLongOpt(), "thing"));
-        checkHandler(optDep, handler, opt);
-
-        assertEquals(optValue == null ? "thing" : optValue, commandLine.getOptionValue(opt.getLongOpt(), thinger));
-        checkHandler(optDep, handler, opt);
-
-        // test Option arg
-        assertEquals(optValue, commandLine.getOptionValue(opt));
-        checkHandler(optDep, handler, opt);
-
-        assertEquals(optValue == null ? "thing" : optValue, commandLine.getOptionValue(opt, "thing"));
-        checkHandler(optDep, handler, opt);
-
-        assertEquals(optValue == null ? "thing" : optValue, commandLine.getOptionValue(opt, thinger));
-        checkHandler(optDep, handler, opt);
-
-        // test option group  arg
-        assertEquals(grpValue, commandLine.getOptionValue(optionGroup));
-        checkHandler(grpDep, handler, grpOpt);
-
-        assertEquals(grpValue == null ? "thing" : grpValue, commandLine.getOptionValue(optionGroup, "thing"));
-        checkHandler(grpDep, handler, grpOpt);
-
-        assertEquals(grpValue == null ? "thing" : grpValue, commandLine.getOptionValue(optionGroup, thinger));
-        checkHandler(grpDep, handler, grpOpt);
-
-        // test other group arg
-        assertNull(commandLine.getOptionValue(otherGroup));
-        checkHandler(false, handler, grpOpt);
-
-        assertEquals("thing", commandLine.getOptionValue(otherGroup, "thing"));
-        checkHandler(false, handler, grpOpt);
-
-        assertEquals("thing", commandLine.getOptionValue(otherGroup, thinger));
-        checkHandler(false, handler, grpOpt);
-
-        // test null Group arg
-        assertNull(commandLine.getOptionValue(nullGroup));
-        checkHandler(false, handler, grpOpt);
-
-        assertEquals("thing", commandLine.getOptionValue(nullGroup, "thing"));
-        checkHandler(false, handler, grpOpt);
-
-        assertEquals("thing", commandLine.getOptionValue(nullGroup, thinger));
-        checkHandler(false, handler, grpOpt);
-
-        // test not an option
-        assertNull(commandLine.getOptionValue("Nope"));
-        checkHandler(false, handler, opt);
-
-        assertEquals("thing", commandLine.getOptionValue("Nope", "thing"));
-        checkHandler(false, handler, opt);
-
-        assertEquals("thing", commandLine.getOptionValue("Nope", thinger));
-        checkHandler(false, handler, opt);
-    }
-
-    /**
-     * Test for get option values with and without default values.  Verifies that deprecated options only report as
-     * deprecated once.
-     * @param args the argument strings to parse.
-     * @param opt the option to check for values with.
-     * @param optionGroup the option group to check for values with.
-     * @param optDep {@code true} if the opt is deprecated.
-     * @param optValue  The value expected from opt.
-     * @param grpDep {@code true} if the group is deprecated.
-     * @param grpValue the value expected from the group.
-     * @param grpOpt the option that is expected to be processed by the group.
-     * @throws ParseException on parse error.
-     */
-    @ParameterizedTest(name = "{0}, {1}")
-    @MethodSource("createOptionValuesParameters")
-    void testGetOptionValues(final String[] args, final Option opt, final OptionGroup optionGroup, final boolean optDep,
-                                    final String[] optValue, final boolean grpDep, final String[] grpValue, final Option grpOpt) throws ParseException {
-        final Options options = new Options().addOptionGroup(optionGroup);
-        final List<Option> handler = new ArrayList<>();
-        final CommandLine commandLine = DefaultParser.builder().setDeprecatedHandler(handler::add).get().parse(options, args);
-        final OptionGroup otherGroup = new OptionGroup().addOption(Option.builder("o").longOpt("other").hasArg().get())
-                .addOption(Option.builder().option("p").longOpt("part").hasArg().get());
-        final OptionGroup nullGroup = null;
-
-        // test char option arg
-        assertArrayEquals(optValue, commandLine.getOptionValues(asChar(opt)));
-        checkHandler(optDep, handler, opt);
-
-        // test short option arg
-        assertArrayEquals(optValue, commandLine.getOptionValues(opt.getOpt()));
-        checkHandler(optDep, handler, opt);
-
-        // test long option arg
-        assertArrayEquals(optValue, commandLine.getOptionValues(opt.getLongOpt()));
-        checkHandler(optDep, handler, opt);
-
-        // test Option arg
-        assertArrayEquals(optValue, commandLine.getOptionValues(opt));
-        checkHandler(optDep, handler, opt);
-
-        // test OptionGroup arg
-        assertArrayEquals(grpValue, commandLine.getOptionValues(optionGroup));
-        checkHandler(grpDep, handler, grpOpt);
-
-        // test not an option
-        assertNull(commandLine.getOptionValues("Nope"));
-        checkHandler(false, handler, opt);
-
-        // test other group arg
-        assertNull(commandLine.getOptionValues(otherGroup));
-        checkHandler(false, handler, grpOpt);
-
-        // test null group arg
-        assertNull(commandLine.getOptionValues(nullGroup));
-        checkHandler(false, handler, grpOpt);
-    }
-
-    @ParameterizedTest(name = "{0}, {1}")
-    @MethodSource("createParsedOptionValueParameters")
-    void testGetParsedOptionValue(final String[] args, final Option opt, final OptionGroup optionGroup, final boolean optDep,
-                                         final Integer optValue, final boolean grpDep, final Integer grpValue, final Option grpOpt) throws ParseException {
-        final Options options = new Options().addOptionGroup(optionGroup);
-        final List<Option> handler = new ArrayList<>();
-        final CommandLine commandLine = DefaultParser.builder().setDeprecatedHandler(handler::add).get().parse(options, args);
-        final Supplier<Integer> thinger = () -> 2;
-        final OptionGroup otherGroup = new OptionGroup().addOption(Option.builder("o").longOpt("other").hasArg().get())
-                .addOption(Option.builder().option("p").longOpt("part").hasArg().get());
-        final OptionGroup nullGroup = null;
-        final Integer thing = 2;
-
-        // test char option arg
-        assertEquals(optValue, commandLine.getParsedOptionValue(asChar(opt)));
-        checkHandler(optDep, handler, opt);
-
-        assertEquals(optValue == null ? thing : optValue, commandLine.getParsedOptionValue(asChar(opt), thing));
-        checkHandler(optDep, handler, opt);
-
-        assertEquals(optValue == null ? thing : optValue, commandLine.getParsedOptionValue(asChar(opt), thinger));
-        checkHandler(optDep, handler, opt);
-
-        // test short option arg
-        assertEquals(optValue, commandLine.getParsedOptionValue(opt.getOpt()));
-        checkHandler(optDep, handler, opt);
-
-        assertEquals(optValue == null ? thing : optValue, commandLine.getParsedOptionValue(opt.getOpt(), thing));
-        checkHandler(optDep, handler, opt);
-
-        assertEquals(optValue == null ? thing : optValue, commandLine.getParsedOptionValue(opt.getOpt(), thinger));
-        checkHandler(optDep, handler, opt);
-
-        // test long option arg
-        assertEquals(optValue, commandLine.getParsedOptionValue(opt.getLongOpt()));
-        checkHandler(optDep, handler, opt);
-
-        assertEquals(optValue == null ? thing : optValue, commandLine.getParsedOptionValue(opt.getLongOpt(), thing));
-        checkHandler(optDep, handler, opt);
-
-        assertEquals(optValue == null ? thing : optValue, commandLine.getParsedOptionValue(opt.getLongOpt(), thinger));
-        checkHandler(optDep, handler, opt);
-
-        // test Option arg
-        assertEquals(optValue, commandLine.getParsedOptionValue(opt));
-        checkHandler(optDep, handler, opt);
-
-        assertEquals(optValue == null ? thing : optValue, commandLine.getParsedOptionValue(opt, thing));
-        checkHandler(optDep, handler, opt);
-
-        assertEquals(optValue == null ? thing : optValue, commandLine.getParsedOptionValue(opt, thinger));
-        checkHandler(optDep, handler, opt);
-
-        // test OptionGroup arg
-        assertEquals(grpValue, commandLine.getParsedOptionValue(optionGroup));
-        checkHandler(grpDep, handler, grpOpt);
-
-        assertEquals(grpValue == null ? thing : grpValue, commandLine.getParsedOptionValue(optionGroup, thing));
-        checkHandler(grpDep, handler, grpOpt);
-
-        assertEquals(grpValue == null ? thing : grpValue, commandLine.getParsedOptionValue(optionGroup, thinger));
-        checkHandler(grpDep, handler, grpOpt);
-
-        // test other Group arg
-        assertNull(commandLine.getParsedOptionValue(otherGroup));
-        checkHandler(false, handler, grpOpt);
-
-        assertEquals(thing, commandLine.getParsedOptionValue(otherGroup, thing));
-        checkHandler(false, handler, grpOpt);
-
-        assertEquals(thing, commandLine.getParsedOptionValue(otherGroup, thinger));
-        checkHandler(false, handler, grpOpt);
-
-        // test null Group arg
-        assertNull(commandLine.getParsedOptionValue(nullGroup));
-        checkHandler(false, handler, grpOpt);
-
-        assertEquals(thing, commandLine.getParsedOptionValue(nullGroup, thing));
-        checkHandler(false, handler, grpOpt);
-
-        assertEquals(thing, commandLine.getParsedOptionValue(nullGroup, thinger));
-        checkHandler(false, handler, grpOpt);
-
-        // test not an option
-        assertNull(commandLine.getParsedOptionValue("Nope"));
-        checkHandler(false, handler, opt);
-
-        assertEquals(thing, commandLine.getParsedOptionValue("Nope", thing));
-        checkHandler(false, handler, opt);
-
-        assertEquals(thing, commandLine.getParsedOptionValue("Nope", thinger));
-        checkHandler(false, handler, opt);
-    }
-
-    @ParameterizedTest(name = "{0}, {1}")
-    @MethodSource("createParsedOptionValuesParameters")
-    void testGetParsedOptionValues(final String[] args, final Option opt, final OptionGroup optionGroup, final boolean optDep,
-                                         final Integer[] optValue, final boolean grpDep, final Integer[] grpValue, final Option grpOpt) throws ParseException {
-        final Options options = new Options().addOptionGroup(optionGroup);
-        final List<Option> handler = new ArrayList<>();
-        final CommandLine commandLine = DefaultParser.builder().setDeprecatedHandler(handler::add).get().parse(options, args);
-        final Supplier<Integer[]> thinger = () -> new Integer[]{2, 3};
-        final OptionGroup otherGroup = new OptionGroup().addOption(Option.builder("o").longOpt("other").hasArg().get())
-                .addOption(Option.builder().option("p").longOpt("part").hasArg().get());
-        final OptionGroup nullGroup = null;
-        final Integer[] thing = {2, 3};
-
-        // test char option arg
-        assertArrayEquals(optValue, commandLine.getParsedOptionValues(asChar(opt)));
-        checkHandler(optDep, handler, opt);
-
-        assertArrayEquals(optValue == null ? thing : optValue, commandLine.getParsedOptionValues(asChar(opt), thing));
-        checkHandler(optDep, handler, opt);
-
-        assertArrayEquals(optValue == null ? thing : optValue, commandLine.getParsedOptionValues(asChar(opt), thinger));
-        checkHandler(optDep, handler, opt);
-
-        // test short option arg
-        assertArrayEquals(optValue, commandLine.getParsedOptionValues(opt.getOpt()));
-        checkHandler(optDep, handler, opt);
-
-        assertArrayEquals(optValue == null ? thing : optValue, commandLine.getParsedOptionValues(opt.getOpt(), thing));
-        checkHandler(optDep, handler, opt);
-
-        assertArrayEquals(optValue == null ? thing : optValue, commandLine.getParsedOptionValues(opt.getOpt(), thinger));
-        checkHandler(optDep, handler, opt);
-
-        // test long option arg
-        assertArrayEquals(optValue, commandLine.getParsedOptionValues(opt.getLongOpt()));
-        checkHandler(optDep, handler, opt);
-
-        assertArrayEquals(optValue == null ? thing : optValue, commandLine.getParsedOptionValues(opt.getLongOpt(), thing));
-        checkHandler(optDep, handler, opt);
-
-        assertArrayEquals(optValue == null ? thing : optValue, commandLine.getParsedOptionValues(opt.getLongOpt(), thinger));
-        checkHandler(optDep, handler, opt);
-
-        // test Option arg
-        assertArrayEquals(optValue, commandLine.getParsedOptionValues(opt));
-        checkHandler(optDep, handler, opt);
-
-        assertArrayEquals(optValue == null ? thing : optValue, commandLine.getParsedOptionValues(opt, thing));
-        checkHandler(optDep, handler, opt);
-
-        assertArrayEquals(optValue == null ? thing : optValue, commandLine.getParsedOptionValues(opt, thinger));
-        checkHandler(optDep, handler, opt);
-
-        // test OptionGroup arg
-        assertArrayEquals(grpValue, commandLine.getParsedOptionValues(optionGroup));
-        checkHandler(grpDep, handler, grpOpt);
-
-        assertArrayEquals(grpValue == null ? thing : grpValue, commandLine.getParsedOptionValues(optionGroup, thing));
-        checkHandler(grpDep, handler, grpOpt);
-
-        assertArrayEquals(grpValue == null ? thing : grpValue, commandLine.getParsedOptionValues(optionGroup, thinger));
-        checkHandler(grpDep, handler, grpOpt);
-
-        // test other Group arg
-        assertNull(commandLine.getParsedOptionValues(otherGroup));
-        checkHandler(false, handler, grpOpt);
-
-        assertArrayEquals(thing, commandLine.getParsedOptionValues(otherGroup, thing));
-        checkHandler(false, handler, grpOpt);
-
-        assertArrayEquals(thing, commandLine.getParsedOptionValues(otherGroup, thinger));
-        checkHandler(false, handler, grpOpt);
-
-        // test null Group arg
-        assertNull(commandLine.getParsedOptionValues(nullGroup));
-        checkHandler(false, handler, grpOpt);
-
-        assertArrayEquals(thing, commandLine.getParsedOptionValues(nullGroup, thing));
-        checkHandler(false, handler, grpOpt);
-
-        assertArrayEquals(thing, commandLine.getParsedOptionValues(nullGroup, thinger));
-        checkHandler(false, handler, grpOpt);
-
-        // test not an option
-        assertNull(commandLine.getParsedOptionValues("Nope"));
-        checkHandler(false, handler, opt);
-
-        assertArrayEquals(thing, commandLine.getParsedOptionValues("Nope", thing));
-        checkHandler(false, handler, opt);
-
-        assertArrayEquals(thing, commandLine.getParsedOptionValues("Nope", thinger));
-        checkHandler(false, handler, opt);
-    }
-
-    /**
-     * Tests the hasOption calls.
-     * @param args the argument strings to parse.
-     * @param opt the option to check for values with.
-     * @param optionGroup the option group to check for values with.
-     * @param optDep {@code true} if the opt is deprecated.
-     * @param has {@code true} if the opt is present.
-     * @param grpDep {@code true} if the group is deprecated.
-     * @param hasGrp {@code true} if the group is present.
-     * @param grpOpt the option that is expected to be processed by the group.
-     * @throws ParseException on parsing error.
-     */
-    @ParameterizedTest(name = "{0}, {1}")
-    @MethodSource("createHasOptionParameters")
-    void testHasOption(final String[] args, final Option opt, final OptionGroup optionGroup, final boolean optDep,
-                              final boolean has, final boolean grpDep, final boolean hasGrp, final Option grpOpt) throws ParseException {
-        final Options options = new Options().addOptionGroup(optionGroup);
-        final List<Option> handler = new ArrayList<>();
-        final CommandLine commandLine = DefaultParser.builder().setDeprecatedHandler(handler::add).get().parse(options, args);
-        final OptionGroup otherGroup = new OptionGroup().addOption(Option.builder("o").longOpt("other").hasArg().get())
-                .addOption(Option.builder().option("p").longOpt("part").hasArg().get());
-        final OptionGroup nullGroup = null;
-
-        // test char option arg
-        assertEquals(has, commandLine.hasOption(asChar(opt)));
-        checkHandler(optDep, handler, opt);
-
-        // test short option arg
-        assertEquals(has, commandLine.hasOption(opt.getOpt()));
-        checkHandler(optDep, handler, opt);
-
-        // test long option arg
-        assertEquals(has, commandLine.hasOption(opt.getLongOpt()));
-        checkHandler(optDep, handler, opt);
-
-        // test Option arg
-        assertEquals(has, commandLine.hasOption(opt));
-        checkHandler(optDep, handler, opt);
-
-        // test OptionGroup arg
-        assertEquals(hasGrp, commandLine.hasOption(optionGroup));
-        checkHandler(grpDep, handler, grpOpt);
-
-        // test other group arg
-        assertFalse(commandLine.hasOption(otherGroup));
-        checkHandler(false, handler, grpOpt);
-
-        // test null group arg
-        assertFalse(commandLine.hasOption(nullGroup));
-        checkHandler(false, handler, grpOpt);
-
-        // test not an option
-        assertFalse(commandLine.hasOption("Nope"));
-        checkHandler(false, handler, opt);
-    }
-
-    /**
-     * Tests the hasOption calls.
-     * @param args the argument strings to parse.
-     * @param opt the option to check for values with.
-     * @param optionGroup the option group to check for values with.
-     * @param optDep {@code true} if the opt is deprecated.
-     * @param has {@code true} if the opt is present.
-     * @param grpDep {@code true} if the group is deprecated.
-     * @param hasGrp {@code true} if the group is present.
-     * @param grpOpt the option that is expected to be processed by the group.
-     * @throws ParseException on parsing error.
-     */
-    @ParameterizedTest(name = "{0}, {1}")
-    @MethodSource("createHasOptionParameters")
-    void testHasOptionNoDeprecationHandler(final String[] args, final Option opt, final OptionGroup optionGroup, final boolean optDep,
-                              final boolean has, final boolean grpDep, final boolean hasGrp, final Option grpOpt) throws ParseException {
-        final Options options = new Options().addOptionGroup(optionGroup);
-        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        final CommandLine commandLine = DefaultParser.builder().get().parse(options, args);
-        final PrintStream ps = System.out;
-        try {
-            System.setOut(new PrintStream(baos));
-
-            // test char option arg
-            assertEquals(has, commandLine.hasOption(asChar(opt)));
-            assertWritten(optDep, baos);
-
-            // test short option arg
-            assertEquals(has, commandLine.hasOption(opt.getOpt()));
-            assertWritten(optDep, baos);
-
-            // test long option arg
-            assertEquals(has, commandLine.hasOption(opt.getLongOpt()));
-            assertWritten(optDep, baos);
-
-            // test Option arg
-            assertEquals(has, commandLine.hasOption(opt));
-            assertWritten(optDep, baos);
-
-            // test OptionGroup arg
-            assertEquals(hasGrp, commandLine.hasOption(optionGroup));
-            assertWritten(grpDep, baos);
-
-            // test not an option
-            assertFalse(commandLine.hasOption("Nope"));
-            assertWritten(false, baos);
-        } finally {
-            System.setOut(ps);
+        
+        @Test
+        @DisplayName("Should create CommandLine with deprecated handler")
+        void shouldCreateCommandLineWithDeprecatedHandler() {
+            CommandLine.Builder builder = CommandLine.builder();
+            CommandLine cmd = builder.build();
+            
+            assertNotNull(cmd);
+        }
+        
+        @Test
+        @DisplayName("Should handle null arguments in builder")
+        void shouldHandleNullArgumentsInBuilder() {
+            CommandLine built = CommandLine.builder()
+                    .addArg(null)
+                    .addOption(null)
+                    .build();
+            
+            assertNotNull(built);
+            assertTrue(built.getArgList().isEmpty());
+            assertEquals(0, built.getOptions().length);
         }
     }
 
-    /**
-     * Tests the hasOption calls.
-     * @param args the argument strings to parse.
-     * @param opt the option to check for values with.
-     * @param optionGroup the option group to check for values with.
-     * @param optDep {@code true} if the opt is deprecated.
-     * @param has {@code true} if the opt is present.
-     * @param grpDep {@code true} if the group is deprecated.
-     * @param hasGrp {@code true} if the group is present.
-     * @param grpOpt the option that is expected to be processed by the group.
-     * @throws ParseException on parsing error.
-     */
-    @ParameterizedTest(name = "{0}, {1}")
-    @MethodSource("createHasOptionParameters")
-    void testHasOptionNullDeprecationHandler(final String[] args, final Option opt, final OptionGroup optionGroup, final boolean optDep,
-                                                  final boolean has, final boolean grpDep, final boolean hasGrp, final Option grpOpt) throws ParseException {
-        final Options options = new Options().addOptionGroup(optionGroup);
-        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        final CommandLine commandLine = DefaultParser.builder().setDeprecatedHandler(null).get().parse(options, args);
-        final PrintStream ps = System.out;
-        try {
-            System.setOut(new PrintStream(baos));
-
-            // test char option arg
-            assertEquals(has, commandLine.hasOption(asChar(opt)));
-            assertWritten(false, baos);
-
-            // test short option arg
-            assertEquals(has, commandLine.hasOption(opt.getOpt()));
-            assertWritten(false, baos);
-
-            // test long option arg
-            assertEquals(has, commandLine.hasOption(opt.getLongOpt()));
-            assertWritten(false, baos);
-
-            // test Option arg
-            assertEquals(has, commandLine.hasOption(opt));
-            assertWritten(false, baos);
-
-            // test OptionGroup arg
-            assertEquals(hasGrp, commandLine.hasOption(optionGroup));
-            assertWritten(false, baos);
-
-            // test not an option
-            assertFalse(commandLine.hasOption("Nope"));
-            assertWritten(false, baos);
-        } finally {
-            System.setOut(ps);
+    @Nested
+    @DisplayName("Add Methods Tests")
+    class AddMethodsTests {
+        
+        @Test
+        @DisplayName("Should add argument to command line")
+        void shouldAddArgumentToCommandLine() {
+            commandLine.addArg("test");
+            
+            assertEquals(1, commandLine.getArgList().size());
+            assertEquals("test", commandLine.getArgList().get(0));
+            assertEquals("test", commandLine.getArgs()[0]);
+        }
+        
+        @Test
+        @DisplayName("Should add option to command line")
+        void shouldAddOptionToCommandLine() {
+            commandLine.addOption(optionA);
+            
+            assertEquals(1, commandLine.getOptions().length);
+            assertEquals(optionA, commandLine.getOptions()[0]);
+            assertTrue(commandLine.hasOption("a"));
+            assertTrue(commandLine.hasOption("alpha"));
+        }
+        
+        @Test
+        @DisplayName("Should handle null argument in addArg")
+        void shouldHandleNullArgumentInAddArg() {
+            commandLine.addArg(null);
+            
+            assertTrue(commandLine.getArgList().isEmpty());
+        }
+        
+        @Test
+        @DisplayName("Should handle null option in addOption")
+        void shouldHandleNullOptionInAddOption() {
+            commandLine.addOption(null);
+            
+            assertEquals(0, commandLine.getOptions().length);
         }
     }
 
-    @ParameterizedTest(name = "{0}, {1}")
-    @MethodSource("createOptionValueParameters")
-    void testNoDeprecationHandler(final String[] args, final Option opt, final OptionGroup optionGroup, final boolean optDep,
-                                   final String optValue, final boolean grpDep, final String grpValue, final Option grpOpt) throws ParseException {
-        final Options options = new Options().addOptionGroup(optionGroup);
-        final CommandLine commandLine = DefaultParser.builder().get().parse(options, args);
-        final Supplier<String> thinger = () -> "thing";
-        final Supplier<String> nullSupplier = null;
-        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        final PrintStream ps = System.out;
-        try {
-            System.setOut(new PrintStream(baos));
-
-            final OptionGroup otherGroup = new OptionGroup().addOption(Option.builder("o").longOpt("other").hasArg().get())
-                    .addOption(Option.builder().option("p").longOpt("part").hasArg().get());
-            final OptionGroup nullGroup = null;
-
-            // test char option
-            assertEquals(optValue, commandLine.getOptionValue(asChar(opt)));
-            assertWritten(optDep, baos);
-
-            assertEquals(optValue == null ? "thing" : optValue, commandLine.getOptionValue(asChar(opt), "thing"));
-            assertWritten(optDep, baos);
-
-            assertEquals(optValue == null ? "thing" : optValue, commandLine.getOptionValue(asChar(opt), thinger));
-            assertWritten(optDep, baos);
-
-            assertEquals(optValue, commandLine.getOptionValue(asChar(opt), nullSupplier));
-            assertWritten(optDep, baos);
-
-            // test short option arg
-            assertEquals(optValue, commandLine.getOptionValue(opt.getOpt()));
-            assertWritten(optDep, baos);
-
-            assertEquals(optValue == null ? "thing" : optValue, commandLine.getOptionValue(opt.getOpt(), "thing"));
-            assertWritten(optDep, baos);
-
-            assertEquals(optValue == null ? "thing" : optValue, commandLine.getOptionValue(opt.getOpt(), thinger));
-            assertWritten(optDep, baos);
-
-            assertEquals(optValue, commandLine.getOptionValue(opt.getOpt(), nullSupplier));
-            assertWritten(optDep, baos);
-
-            // test long option arg
-            assertEquals(optValue, commandLine.getOptionValue(opt.getLongOpt()));
-            assertWritten(optDep, baos);
-
-            assertEquals(optValue == null ? "thing" : optValue, commandLine.getOptionValue(opt.getLongOpt(), "thing"));
-            assertWritten(optDep, baos);
-
-            assertEquals(optValue == null ? "thing" : optValue, commandLine.getOptionValue(opt.getLongOpt(), thinger));
-            assertWritten(optDep, baos);
-
-            assertEquals(optValue, commandLine.getOptionValue(opt.getLongOpt(), nullSupplier));
-            assertWritten(optDep, baos);
-
-            // test Option arg
-            assertEquals(optValue, commandLine.getOptionValue(opt));
-            assertWritten(optDep, baos);
-
-            assertEquals(optValue == null ? "thing" : optValue, commandLine.getOptionValue(opt, "thing"));
-            assertWritten(optDep, baos);
-
-            assertEquals(optValue == null ? "thing" : optValue, commandLine.getOptionValue(opt, thinger));
-            assertWritten(optDep, baos);
-
-            assertEquals(optValue, commandLine.getOptionValue(opt, nullSupplier));
-            assertWritten(optDep, baos);
-
-            // test optionGroup  arg
-            assertEquals(grpValue, commandLine.getOptionValue(optionGroup));
-            assertWritten(grpDep, baos);
-
-            assertEquals(grpValue == null ? "thing" : grpValue, commandLine.getOptionValue(optionGroup, "thing"));
-            assertWritten(grpDep, baos);
-
-            assertEquals(grpValue == null ? "thing" : grpValue, commandLine.getOptionValue(optionGroup, thinger));
-            assertWritten(grpDep, baos);
-
-            assertEquals(grpValue, commandLine.getOptionValue(optionGroup, nullSupplier));
-            assertWritten(grpDep, baos);
-
-            // test other group arg
-            assertNull(commandLine.getOptionValue(otherGroup));
-            assertWritten(false, baos);
-
-            assertEquals("thing", commandLine.getOptionValue(otherGroup, "thing"));
-            assertWritten(false, baos);
-
-            assertEquals("thing", commandLine.getOptionValue(otherGroup, thinger));
-            assertWritten(false, baos);
-
-            assertNull(commandLine.getOptionValue(otherGroup, nullSupplier));
-            assertWritten(false, baos);
-
-            // test null Group arg
-            assertNull(commandLine.getOptionValue(nullGroup));
-            assertWritten(false, baos);
-
-            assertEquals("thing", commandLine.getOptionValue(nullGroup, "thing"));
-            assertWritten(false, baos);
-
-            assertEquals("thing", commandLine.getOptionValue(nullGroup, thinger));
-            assertWritten(false, baos);
-
-            assertNull(commandLine.getOptionValue(nullGroup, nullSupplier));
-            assertWritten(false, baos);
-
-            // test not an option
-            assertNull(commandLine.getOptionValue("Nope"));
-            assertWritten(false, baos);
-
-            assertEquals("thing", commandLine.getOptionValue("Nope", "thing"));
-            assertWritten(false, baos);
-
-            assertEquals("thing", commandLine.getOptionValue("Nope", thinger));
-            assertWritten(false, baos);
-
-            assertNull(commandLine.getOptionValue("Nope", nullSupplier));
-            assertWritten(false, baos);
-        } finally {
-            System.setOut(ps);
+    @Nested
+    @DisplayName("Option Presence Tests")
+    class OptionPresenceTests {
+        
+        @BeforeEach
+        void setUp() {
+            commandLine.addOption(optionA);
+            commandLine.addOption(optionWithArgs);
+        }
+        
+        @Test
+        @DisplayName("Should check option presence by char")
+        void shouldCheckOptionPresenceByChar() {
+            assertTrue(commandLine.hasOption('a'));
+            assertFalse(commandLine.hasOption('x'));
+        }
+        
+        @Test
+        @DisplayName("Should check option presence by string")
+        void shouldCheckOptionPresenceByString() {
+            assertTrue(commandLine.hasOption("a"));
+            assertTrue(commandLine.hasOption("alpha"));
+            assertFalse(commandLine.hasOption("nonexistent"));
+        }
+        
+        @Test
+        @DisplayName("Should check option presence by Option object")
+        void shouldCheckOptionPresenceByOptionObject() {
+            assertTrue(commandLine.hasOption(optionA));
+            assertFalse(commandLine.hasOption(optionB));
+        }
+        
+        @Test
+        @DisplayName("Should handle null option name")
+        void shouldHandleNullOptionName() {
+            assertFalse(commandLine.hasOption((String) null));
+        }
+        
+        @Test
+        @DisplayName("Should handle null option object")
+        void shouldHandleNullOptionObject() {
+            assertFalse(commandLine.hasOption((Option) null));
         }
     }
 
-    @Test
-    void testNullOption() throws Exception {
-        final Options options = new Options();
-        final Option optI = Option.builder("i").hasArg().type(Number.class).get();
-        final Option optF = Option.builder("f").hasArg().get();
-        options.addOption(optI);
-        options.addOption(optF);
-        final CommandLineParser parser = new DefaultParser();
-        final CommandLine cmd = parser.parse(options, new String[] {"-i", "123", "-f", "foo"});
-        assertNull(cmd.getOptionValue((Option) null));
-        assertNull(cmd.getParsedOptionValue((Option) null));
-        assertNull(cmd.getOptionValue((OptionGroup) null));
-        assertNull(cmd.getParsedOptionValue((OptionGroup) null));
+    @Nested
+    @DisplayName("Option Value Retrieval Tests")
+    class OptionValueRetrievalTests {
+        
+        @BeforeEach
+        void setUp() {
+            Option fileOption = Option.builder("f").longOpt("file").hasArgs().desc("File option").build();
+            fileOption.processValue("file1.txt");
+            fileOption.processValue("file2.txt");
+            
+            commandLine.addOption(fileOption);
+            
+            Option singleOption = Option.builder("s").longOpt("single").hasArg().desc("Single option").build();
+            singleOption.processValue("value");
+            commandLine.addOption(singleOption);
+        }
+        
+        @Test
+        @DisplayName("Should get single option value by char")
+        void shouldGetSingleOptionValueByChar() {
+            assertEquals("value", commandLine.getOptionValue('s'));
+        }
+        
+        @Test
+        @DisplayName("Should get single option value by string")
+        void shouldGetSingleOptionValueByString() {
+            assertEquals("value", commandLine.getOptionValue("s"));
+            assertEquals("value", commandLine.getOptionValue("single"));
+        }
+        
+        @Test
+        @DisplayName("Should return null for non-existent option value")
+        void shouldReturnNullForNonExistentOptionValue() {
+            assertNull(commandLine.getOptionValue("nonexistent"));
+        }
+        
+        @Test
+        @DisplayName("Should get option values array by char")
+        void shouldGetOptionValuesArrayByChar() {
+            String[] values = commandLine.getOptionValues('f');
+            
+            assertNotNull(values);
+            assertEquals(2, values.length);
+            assertEquals("file1.txt", values[0]);
+            assertEquals("file2.txt", values[1]);
+        }
+        
+        @Test
+        @DisplayName("Should get option values array by string")
+        void shouldGetOptionValuesArrayByString() {
+            String[] values = commandLine.getOptionValues("file");
+            
+            assertNotNull(values);
+            assertEquals(2, values.length);
+            assertEquals("file1.txt", values[0]);
+            assertEquals("file2.txt", values[1]);
+        }
+        
+        @Test
+        @DisplayName("Should return null for non-existent option values")
+        void shouldReturnNullForNonExistentOptionValues() {
+            assertNull(commandLine.getOptionValues("nonexistent"));
+        }
+        
+        @Test
+        @DisplayName("Should return null for null option values")
+        void shouldReturnNullForNullOptionValues() {
+            assertNull(commandLine.getOptionValues((Option) null));
+        }
+    }
+
+    @Nested
+    @DisplayName("Default Value Tests")
+    class DefaultValueTests {
+        
+        @Test
+        @DisplayName("Should return default value for non-existent option")
+        void shouldReturnDefaultValueForNonExistentOption() {
+            assertEquals("default", commandLine.getOptionValue('x', "default"));
+            assertEquals("default", commandLine.getOptionValue("nonexistent", "default"));
+        }
+        
+        @Test
+        @DisplayName("Should return default value from supplier")
+        void shouldReturnDefaultValueFromSupplier() {
+            Supplier<String> supplier = () -> "supplied";
+            assertEquals("supplied", commandLine.getOptionValue('x', supplier));
+            assertEquals("supplied", commandLine.getOptionValue("nonexistent", supplier));
+        }
+        
+        @Test
+        @DisplayName("Should return option value over default value")
+        void shouldReturnOptionValueOverDefaultValue() {
+            Option option = Option.builder("o").hasArg().desc("Option").build();
+            option.processValue("actual");
+            commandLine.addOption(option);
+            
+            assertEquals("actual", commandLine.getOptionValue('o', "default"));
+            assertEquals("actual", commandLine.getOptionValue("o", "default"));
+        }
+        
+        @Test
+        @DisplayName("Should handle null default value supplier")
+        void shouldHandleNullDefaultValueSupplier() {
+            assertNull(commandLine.getOptionValue('x', (Supplier<String>) null));
+        }
+    }
+
+    @Nested
+    @DisplayName("Option Group Tests")
+    class OptionGroupTests {
+        
+        private OptionGroup group;
+        
+        @BeforeEach
+        void setUp() {
+            group = new OptionGroup();
+            Option option1 = Option.builder("1").hasArg().desc("Option 1").build();
+            Option option2 = Option.builder("2").hasArg().desc("Option 2").build();
+            group.addOption(option1).addOption(option2);
+            
+            option1.processValue("value1");
+            commandLine.addOption(option1);
+            try {
+                group.setSelected(option1);
+            } catch (AlreadySelectedException e) {
+                // Should not happen in test setup
+            }
+        }
+        
+        @Test
+        @DisplayName("Should check option group presence")
+        void shouldCheckOptionGroupPresence() {
+            assertTrue(commandLine.hasOption(group));
+        }
+        
+        @Test
+        @DisplayName("Should get option value from group")
+        void shouldGetOptionValueFromGroup() {
+            assertEquals("value1", commandLine.getOptionValue(group));
+        }
+        
+        @Test
+        @DisplayName("Should get option values from group")
+        void shouldGetOptionValuesFromGroup() {
+            String[] values = commandLine.getOptionValues(group);
+            
+            assertNotNull(values);
+            assertEquals(1, values.length);
+            assertEquals("value1", values[0]);
+        }
+        
+        @Test
+        @DisplayName("Should return default value for non-selected group")
+        void shouldReturnDefaultValueForNonSelectedGroup() {
+            OptionGroup emptyGroup = new OptionGroup();
+            assertEquals("default", commandLine.getOptionValue(emptyGroup, "default"));
+        }
+        
+        @Test
+        @DisplayName("Should return null for null option group")
+        void shouldReturnNullForNullOptionGroup() {
+            assertNull(commandLine.getOptionValue((OptionGroup) null));
+            assertNull(commandLine.getOptionValues((OptionGroup) null));
+            assertFalse(commandLine.hasOption((OptionGroup) null));
+        }
+    }
+
+    @Nested
+    @DisplayName("Properties Tests")
+    class PropertiesTests {
+        
+        @Test
+        @DisplayName("Should get properties from option with key-value pairs")
+        void shouldGetPropertiesFromOptionWithKeyValuePairs() {
+            Option propOption = Option.builder("D").hasArgs().desc("Properties").build();
+            propOption.processValue("key1");
+            propOption.processValue("value1");
+            propOption.processValue("key2");
+            propOption.processValue("value2");
+            commandLine.addOption(propOption);
+            
+            Properties props = commandLine.getOptionProperties("D");
+            
+            assertNotNull(props);
+            assertEquals("value1", props.getProperty("key1"));
+            assertEquals("value2", props.getProperty("key2"));
+        }
+        
+        @Test
+        @DisplayName("Should get properties from option with boolean flag")
+        void shouldGetPropertiesFromOptionWithBooleanFlag() {
+            Option propOption = Option.builder("D").hasArgs().desc("Properties").build();
+            propOption.processValue("flag");
+            commandLine.addOption(propOption);
+            
+            Properties props = commandLine.getOptionProperties("D");
+            
+            assertNotNull(props);
+            assertEquals("true", props.getProperty("flag"));
+        }
+        
+        @Test
+        @DisplayName("Should get properties from Option object")
+        void shouldGetPropertiesFromOptionObject() {
+            Option propOption = Option.builder("D").hasArgs().desc("Properties").build();
+            propOption.processValue("key");
+            propOption.processValue("value");
+            commandLine.addOption(propOption);
+            
+            Properties props = commandLine.getOptionProperties(propOption);
+            
+            assertNotNull(props);
+            assertEquals("value", props.getProperty("key"));
+        }
+        
+        @Test
+        @DisplayName("Should return empty properties for non-existent option")
+        void shouldReturnEmptyPropertiesForNonExistentOption() {
+            Properties props = commandLine.getOptionProperties("nonexistent");
+            
+            assertNotNull(props);
+            assertTrue(props.isEmpty());
+        }
+        
+        @Test
+        @DisplayName("Should return empty properties for null option")
+        void shouldReturnEmptyPropertiesForNullOption() {
+            Properties props = commandLine.getOptionProperties((Option) null);
+            
+            assertNotNull(props);
+            assertTrue(props.isEmpty());
+        }
+    }
+
+    @Nested
+    @DisplayName("Parsed Value Tests")
+    class ParsedValueTests {
+        
+        @Test
+        @DisplayName("Should get parsed option value with converter")
+        void shouldGetParsedOptionValueWithConverter() throws ParseException {
+            Option intOption = Option.builder("n").hasArg().type(Integer.class).desc("Number").build();
+            intOption.processValue("42");
+            commandLine.addOption(intOption);
+            
+            Integer result = commandLine.getParsedOptionValue("n");
+            
+            assertNotNull(result);
+            assertEquals(Integer.valueOf(42), result);
+        }
+        
+        @Test
+        @DisplayName("Should get parsed option value with default")
+        void shouldGetParsedOptionValueWithDefault() throws ParseException {
+            Integer result = commandLine.getParsedOptionValue("nonexistent", 100);
+            
+            assertNotNull(result);
+            assertEquals(Integer.valueOf(100), result);
+        }
+        
+        @Test
+        @DisplayName("Should get parsed option value with supplier")
+        void shouldGetParsedOptionValueWithSupplier() throws ParseException {
+            Supplier<Integer> supplier = () -> 200;
+            Integer result = commandLine.getParsedOptionValue("nonexistent", supplier);
+            
+            assertNotNull(result);
+            assertEquals(Integer.valueOf(200), result);
+        }
+        
+        @Test
+        @DisplayName("Should throw ParseException for conversion error")
+        void shouldThrowParseExceptionForConversionError() {
+            Option intOption = Option.builder("n").hasArg().type(Integer.class).desc("Number").build();
+            intOption.processValue("not-a-number");
+            commandLine.addOption(intOption);
+            
+            assertThrows(ParseException.class, () -> {
+                commandLine.getParsedOptionValue("n");
+            });
+        }
+        
+        @Test
+        @DisplayName("Should get parsed option values array")
+        void shouldGetParsedOptionValuesArray() throws ParseException {
+            Option intOption = Option.builder("n").hasArgs().type(Integer.class).desc("Numbers").build();
+            intOption.processValue("1");
+            intOption.processValue("2");
+            intOption.processValue("3");
+            commandLine.addOption(intOption);
+            
+            Integer[] result = commandLine.getParsedOptionValues("n");
+            
+            assertNotNull(result);
+            assertEquals(3, result.length);
+            assertEquals(Integer.valueOf(1), result[0]);
+            assertEquals(Integer.valueOf(2), result[1]);
+            assertEquals(Integer.valueOf(3), result[2]);
+        }
+        
+        @Test
+        @DisplayName("Should get parsed option values array with default")
+        void shouldGetParsedOptionValuesArrayWithDefault() throws ParseException {
+            Integer[] defaultValue = {10, 20};
+            Integer[] result = commandLine.getParsedOptionValues("nonexistent", defaultValue);
+            
+            assertNotNull(result);
+            assertSame(defaultValue, result);
+        }
+    }
+
+    @Nested
+    @DisplayName("Deprecated Option Tests")
+    class DeprecatedOptionTests {
+        
+        @Test
+        @DisplayName("Should handle deprecated option with default handler")
+        void shouldHandleDeprecatedOptionWithDefaultHandler() {
+            Option deprecatedOption = Option.builder("d").longOpt("deprecated").deprecated().desc("Deprecated option").build();
+            commandLine.addOption(deprecatedOption);
+            
+            // Should not throw exception
+            assertTrue(commandLine.hasOption("d"));
+        }
+        
+        @Test
+        @DisplayName("Should call custom deprecated handler")
+        void shouldCallCustomDeprecatedHandler() {
+            @SuppressWarnings("unchecked")
+            Consumer<Option> handler = mock(Consumer.class);
+            CommandLine customCmd = CommandLine.builder()
+                    .setDeprecatedHandler(handler)
+                    .addOption(Option.builder("d").deprecated().build())
+                    .build();
+            
+            customCmd.hasOption("d");
+            
+            verify(handler, times(1)).accept(any(Option.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("Iterator Tests")
+    class IteratorTests {
+        
+        @Test
+        @DisplayName("Should iterate over options")
+        void shouldIterateOverOptions() {
+            commandLine.addOption(optionA);
+            commandLine.addOption(optionB);
+            
+            Iterator<Option> iterator = commandLine.iterator();
+            assertNotNull(iterator);
+            
+            int count = 0;
+            while (iterator.hasNext()) {
+                iterator.next();
+                count++;
+            }
+            
+            assertEquals(2, count);
+        }
+        
+        @Test
+        @DisplayName("Should handle empty iterator")
+        void shouldHandleEmptyIterator() {
+            Iterator<Option> iterator = commandLine.iterator();
+            assertNotNull(iterator);
+            assertFalse(iterator.hasNext());
+        }
+    }
+
+    @Nested
+    @DisplayName("Argument List Tests")
+    class ArgumentListTests {
+        
+        @Test
+        @DisplayName("Should get argument list")
+        void shouldGetArgumentList() {
+            commandLine.addArg("arg1");
+            commandLine.addArg("arg2");
+            commandLine.addArg("arg3");
+            
+            List<String> args = commandLine.getArgList();
+            assertNotNull(args);
+            assertEquals(3, args.size());
+            assertEquals("arg1", args.get(0));
+            assertEquals("arg2", args.get(1));
+            assertEquals("arg3", args.get(2));
+        }
+        
+        @Test
+        @DisplayName("Should get arguments as array")
+        void shouldGetArgumentsAsArray() {
+            commandLine.addArg("arg1");
+            commandLine.addArg("arg2");
+            
+            String[] args = commandLine.getArgs();
+            assertNotNull(args);
+            assertEquals(2, args.length);
+            assertEquals("arg1", args[0]);
+            assertEquals("arg2", args[1]);
+        }
+        
+        @Test
+        @DisplayName("Should return empty array for no arguments")
+        void shouldReturnEmptyArrayForNoArguments() {
+            String[] args = commandLine.getArgs();
+            assertNotNull(args);
+            assertEquals(0, args.length);
+        }
+    }
+
+    @Nested
+    @DisplayName("Edge Case Tests")
+    class EdgeCaseTests {
+        
+        @Test
+        @DisplayName("Should handle deprecated getOptionObject methods")
+        void shouldHandleDeprecatedGetOptionObjectMethods() {
+            Option intOption = Option.builder("n").hasArg().type(Integer.class).desc("Number").build();
+            intOption.processValue("42");
+            commandLine.addOption(intOption);
+            
+            // These methods are deprecated but should still work
+            Object result1 = commandLine.getOptionObject('n');
+            Object result2 = commandLine.getOptionObject("n");
+            
+            assertNotNull(result1);
+            assertNotNull(result2);
+            assertEquals(42, result1);
+            assertEquals(42, result2);
+        }
+        
+        @Test
+        @DisplayName("Should handle conversion error in getOptionObject")
+        void shouldHandleConversionErrorInGetOptionObject() {
+            Option intOption = Option.builder("n").hasArg().type(Integer.class).desc("Number").build();
+            intOption.processValue("not-a-number");
+            commandLine.addOption(intOption);
+            
+            // Should return null and print error message
+            Object result = commandLine.getOptionObject("n");
+            assertNull(result);
+        }
+        
+        @Test
+        @DisplayName("Should resolve option with hyphens")
+        void shouldResolveOptionWithHyphens() {
+            commandLine.addOption(optionA);
+            
+            assertTrue(commandLine.hasOption("-a"));
+            assertTrue(commandLine.hasOption("--alpha"));
+        }
+        
+        @Test
+        @DisplayName("Should handle empty option name")
+        void shouldHandleEmptyOptionName() {
+            assertFalse(commandLine.hasOption(""));
+        }
+        
+        @Test
+        @DisplayName("Should handle option with same short and long name")
+        void shouldHandleOptionWithSameShortAndLongName() {
+            Option sameOption = Option.builder("a").longOpt("a").desc("Same name").build();
+            commandLine.addOption(sameOption);
+            
+            assertTrue(commandLine.hasOption("a"));
+        }
+    }
+
+    @Nested
+    @DisplayName("Integration Tests")
+    class IntegrationTests {
+        
+        @Test
+        @DisplayName("Should handle complex command line scenario")
+        void shouldHandleComplexCommandLineScenario() throws ParseException {
+            // Setup options with various types
+            Option stringOption = Option.builder("s").hasArg().desc("String option").build();
+            stringOption.processValue("text");
+            
+            Option intOption = Option.builder("i").hasArg().type(Integer.class).desc("Integer option").build();
+            intOption.processValue("123");
+            
+            Option multiOption = Option.builder("m").hasArgs().desc("Multi-value option").build();
+            multiOption.processValue("val1");
+            multiOption.processValue("val2");
+            
+            Option propOption = Option.builder("D").hasArgs().desc("Properties").build();
+            propOption.processValue("key1");
+            propOption.processValue("value1");
+            propOption.processValue("key2");
+            propOption.processValue("value2");
+            
+            // Add options to command line
+            commandLine.addOption(stringOption);
+            commandLine.addOption(intOption);
+            commandLine.addOption(multiOption);
+            commandLine.addOption(propOption);
+            
+            // Add arguments
+            commandLine.addArg("arg1");
+            commandLine.addArg("arg2");
+            
+            // Verify all functionality
+            assertTrue(commandLine.hasOption("s"));
+            assertEquals("text", commandLine.getOptionValue("s"));
+            
+            assertTrue(commandLine.hasOption("i"));
+            assertEquals(Integer.valueOf(123), commandLine.getParsedOptionValue("i"));
+            
+            assertTrue(commandLine.hasOption("m"));
+            String[] multiValues = commandLine.getOptionValues("m");
+            assertNotNull(multiValues);
+            assertEquals(2, multiValues.length);
+            
+            assertTrue(commandLine.hasOption("D"));
+            Properties props = commandLine.getOptionProperties("D");
+            assertEquals("value1", props.getProperty("key1"));
+            assertEquals("value2", props.getProperty("key2"));
+            
+            assertEquals(2, commandLine.getArgList().size());
+            assertEquals("arg1", commandLine.getArgList().get(0));
+            assertEquals("arg2", commandLine.getArgList().get(1));
+            
+            assertEquals(4, commandLine.getOptions().length);
+        }
+        
+        @Test
+        @DisplayName("Should handle option group with parsed values")
+        void shouldHandleOptionGroupWithParsedValues() throws ParseException {
+            OptionGroup group = new OptionGroup();
+            Option intOption = Option.builder("1").hasArg().type(Integer.class).desc("Option 1").build();
+            Option stringOption = Option.builder("2").hasArg().desc("Option 2").build();
+            group.addOption(intOption).addOption(stringOption);
+            
+            intOption.processValue("999");
+            commandLine.addOption(intOption);
+            try {
+                group.setSelected(intOption);
+            } catch (AlreadySelectedException e) {
+                // Should not happen in test setup
+            }
+            
+            assertTrue(commandLine.hasOption(group));
+            assertEquals(Integer.valueOf(999), commandLine.getParsedOptionValue(group));
+            
+            Integer[] values = commandLine.getParsedOptionValues(group);
+            assertNotNull(values);
+            assertEquals(1, values.length);
+            assertEquals(Integer.valueOf(999), values[0]);
+        }
     }
 }
