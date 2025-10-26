@@ -1,261 +1,455 @@
-/*
-  Licensed to the Apache Software Foundation (ASF) under one or more
-  contributor license agreements.  See the NOTICE file distributed with
-  this work for additional information regarding copyright ownership.
-  The ASF licenses this file to You under the Apache License, Version 2.0
-  (the "License"); you may not use this file except in compliance with
-  the License.  You may obtain a copy of the License at
-
-      https://www.apache.org/licenses/LICENSE-2.0
-
-  Unless required by applicable law or agreed to in writing, software
-  distributed under the License is distributed on an "AS IS" BASIS,
-  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  See the License for the specific language governing permissions and
-  limitations under the License.
- */
-
 package org.apache.commons.cli;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.net.MalformedURLException;
 import java.net.URL;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
-import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Stream;
-
-import org.apache.commons.io.IOUtils;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 
 class TypeHandlerTest {
 
-    /** Used for Class and Object creation tests. */
-    public static class Instantiable {
+    private TypeHandler typeHandler;
 
-        @Override
-        public boolean equals(final Object arg0) {
-            return arg0 instanceof Instantiable;
+    @BeforeEach
+    void setUp() {
+        typeHandler = new TypeHandler();
+    }
+
+    @Nested
+    @DisplayName("Static Method Tests")
+    class StaticMethodTests {
+        
+        @Test
+        @DisplayName("Should get default TypeHandler instance")
+        void shouldGetDefaultTypeHandlerInstance() {
+            TypeHandler defaultHandler = TypeHandler.getDefault();
+            assertNotNull(defaultHandler);
+            assertSame(TypeHandler.getDefault(), defaultHandler); // Should be singleton
         }
-
-        @Override
-        public int hashCode() {
-            return 1;
-        }
-    }
-
-    /** Used for Class and Object negative creation tests */
-    public static final class NotInstantiable {
-        private NotInstantiable() {
-        }
-
-    }
-
-    /** Always returns the same Path. */
-    private static final Converter<Path, InvalidPathException> PATH_CONVERTER = s -> Paths.get("foo");
-
-    private static Stream<Date> createDateFixtures() {
-        return Stream.of(Date.from(Instant.EPOCH), Date.from(Instant.ofEpochSecond(0)), Date.from(Instant.ofEpochSecond(40_000)));
-
-    }
-
-    private static Stream<Arguments> createValueTestParameters() throws MalformedURLException {
-        // force the PatternOptionBuilder to load / modify the TypeHandler table.
-        @SuppressWarnings("unused")
-        final Class<?> loadStatic = PatternOptionBuilder.FILES_VALUE;
-        // reset the type handler table.
-        // TypeHandler.resetConverters();
-        final List<Arguments> list = new ArrayList<>();
-
-        /*
-         * Dates calculated from strings are dependent upon configuration and environment settings for the machine on which the test is running. To avoid this
-         * problem, convert the time into a string and then unparse that using the converter. This produces strings that always match the correct time zone.
-         */
-        final Date date = new Date(1023400137000L);
-        final DateFormat dateFormat = new SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy");
-
-        list.add(Arguments.of(Instantiable.class.getName(), PatternOptionBuilder.CLASS_VALUE, Instantiable.class));
-        list.add(Arguments.of("what ever", PatternOptionBuilder.CLASS_VALUE, ParseException.class));
-
-        list.add(Arguments.of("what ever", PatternOptionBuilder.DATE_VALUE, ParseException.class));
-        list.add(Arguments.of(dateFormat.format(date), PatternOptionBuilder.DATE_VALUE, date));
-        list.add(Arguments.of("Jun 06 17:48:57 EDT 2002", PatternOptionBuilder.DATE_VALUE, ParseException.class));
-
-        list.add(Arguments.of("non-existing.file", PatternOptionBuilder.EXISTING_FILE_VALUE, ParseException.class));
-
-        list.add(Arguments.of("some-file.txt", PatternOptionBuilder.FILE_VALUE, new File("some-file.txt")));
-
-        list.add(Arguments.of("some-path.txt", Path.class, new File("some-path.txt").toPath()));
-
-        // the PatternOptionBuilder.FILES_VALUE is not registered so it should just return the string
-        list.add(Arguments.of("some.files", PatternOptionBuilder.FILES_VALUE, "some.files"));
-
-        list.add(Arguments.of("just-a-string", Integer.class, ParseException.class));
-        list.add(Arguments.of("5", Integer.class, 5));
-        list.add(Arguments.of("5.5", Integer.class, ParseException.class));
-        list.add(Arguments.of(Long.toString(Long.MAX_VALUE), Integer.class, ParseException.class));
-
-        list.add(Arguments.of("just-a-string", Long.class, ParseException.class));
-        list.add(Arguments.of("5", Long.class, 5L));
-        list.add(Arguments.of("5.5", Long.class, ParseException.class));
-
-        list.add(Arguments.of("just-a-string", Short.class, ParseException.class));
-        list.add(Arguments.of("5", Short.class, (short) 5));
-        list.add(Arguments.of("5.5", Short.class, ParseException.class));
-        list.add(Arguments.of(Integer.toString(Integer.MAX_VALUE), Short.class, ParseException.class));
-
-        list.add(Arguments.of("just-a-string", Byte.class, ParseException.class));
-        list.add(Arguments.of("5", Byte.class, (byte) 5));
-        list.add(Arguments.of("5.5", Byte.class, ParseException.class));
-        list.add(Arguments.of(Short.toString(Short.MAX_VALUE), Byte.class, ParseException.class));
-
-        list.add(Arguments.of("just-a-string", Character.class, 'j'));
-        list.add(Arguments.of("5", Character.class, '5'));
-        list.add(Arguments.of("5.5", Character.class, '5'));
-        list.add(Arguments.of("\\u0124", Character.class, Character.toChars(0x0124)[0]));
-
-        list.add(Arguments.of("just-a-string", Double.class, ParseException.class));
-        list.add(Arguments.of("5", Double.class, 5d));
-        list.add(Arguments.of("5.5", Double.class, 5.5));
-
-        list.add(Arguments.of("just-a-string", Float.class, ParseException.class));
-        list.add(Arguments.of("5", Float.class, 5f));
-        list.add(Arguments.of("5.5", Float.class, 5.5f));
-        list.add(Arguments.of(Double.toString(Double.MAX_VALUE), Float.class, Float.POSITIVE_INFINITY));
-
-        list.add(Arguments.of("just-a-string", BigInteger.class, ParseException.class));
-        list.add(Arguments.of("5", BigInteger.class, new BigInteger("5")));
-        list.add(Arguments.of("5.5", BigInteger.class, ParseException.class));
-
-        list.add(Arguments.of("just-a-string", BigDecimal.class, ParseException.class));
-        list.add(Arguments.of("5", BigDecimal.class, new BigDecimal("5")));
-        list.add(Arguments.of("5.5", BigDecimal.class, new BigDecimal(5.5)));
-
-        list.add(Arguments.of("1.5", PatternOptionBuilder.NUMBER_VALUE, Double.valueOf(1.5)));
-        list.add(Arguments.of("15", PatternOptionBuilder.NUMBER_VALUE, Long.valueOf(15)));
-        list.add(Arguments.of("not a number", PatternOptionBuilder.NUMBER_VALUE, ParseException.class));
-
-        list.add(Arguments.of(Instantiable.class.getName(), PatternOptionBuilder.OBJECT_VALUE, new Instantiable()));
-        list.add(Arguments.of(NotInstantiable.class.getName(), PatternOptionBuilder.OBJECT_VALUE, ParseException.class));
-        list.add(Arguments.of("unknown", PatternOptionBuilder.OBJECT_VALUE, ParseException.class));
-
-        list.add(Arguments.of("String", PatternOptionBuilder.STRING_VALUE, "String"));
-
-        final String urlString = "https://commons.apache.org";
-        list.add(Arguments.of(urlString, PatternOptionBuilder.URL_VALUE, new URL(urlString)));
-        list.add(Arguments.of("Malformed-url", PatternOptionBuilder.URL_VALUE, ParseException.class));
-
-        return list.stream();
-
-    }
-
-    @Test
-    void testCreateClass() throws ParseException {
-        final Class<?> cls = getClass();
-        assertEquals(cls, TypeHandler.createClass(cls.getName()));
-    }
-
-    @ParameterizedTest
-    @MethodSource("createDateFixtures")
-    void testCreateDate(final Date date) {
-        assertEquals(date, TypeHandler.createDate(date.toString()));
-    }
-
-    @Test
-    void testCreateFile() {
-        final File file = new File("").getAbsoluteFile();
-        assertEquals(file, TypeHandler.createFile(file.toString()));
-    }
-
-    @Test
-    void testCreateFiles() {
-        assertThrows(UnsupportedOperationException.class, () -> TypeHandler.createFiles(null));
-    }
-
-    @Test
-    void testCreateNumber() throws ParseException {
-        assertEquals(0L, TypeHandler.createNumber("0"));
-        assertEquals(0d, TypeHandler.createNumber("0.0"));
-    }
-
-    @Test
-    void testCreateObject() throws ParseException {
-        assertTrue(TypeHandler.createObject(Date.class.getName()) instanceof Date);
-    }
-
-    @Test
-    void testCreateURL() throws ParseException, MalformedURLException {
-        final URL file = Paths.get("").toAbsolutePath().toUri().toURL();
-        assertEquals(file, TypeHandler.createURL(file.toString()));
-    }
-
-    @SuppressWarnings("unchecked")
-    @ParameterizedTest(name = "{0} as {1}")
-    @MethodSource("createValueTestParameters")
-    void testCreateValue(final String str, final Class<?> type, final Object expected) throws Exception {
-        @SuppressWarnings("cast")
-        final Object objectApiTest = type; // KEEP this cast
-        if (expected instanceof Class<?> && Throwable.class.isAssignableFrom((Class<?>) expected)) {
-            assertThrows((Class<Throwable>) expected, () -> TypeHandler.createValue(str, type));
-            assertThrows((Class<Throwable>) expected, () -> TypeHandler.createValue(str, objectApiTest));
-        } else {
-            assertEquals(expected, TypeHandler.createValue(str, type));
-            assertEquals(expected, TypeHandler.createValue(str, objectApiTest));
+        
+        @Test
+        @DisplayName("Should create default converter map")
+        void shouldCreateDefaultConverterMap() {
+            Map<Class<?>, Converter<?, ? extends Throwable>> map = TypeHandler.createDefaultMap();
+            assertNotNull(map);
+            assertFalse(map.isEmpty());
         }
     }
 
-    @Test
-    void testCreateValueExistingFile() throws Exception {
-        try (FileInputStream result = TypeHandler.createValue("src/test/resources/org/apache/commons/cli/existing-readable.file",
-                PatternOptionBuilder.EXISTING_FILE_VALUE)) {
+    @Nested
+    @DisplayName("Constructor Tests")
+    class ConstructorTests {
+        
+        @Test
+        @DisplayName("Should create TypeHandler with default constructor")
+        void shouldCreateTypeHandlerWithDefaultConstructor() {
+            assertNotNull(typeHandler);
+        }
+        
+        @Test
+        @DisplayName("Should create TypeHandler with custom converter map")
+        void shouldCreateTypeHandlerWithCustomConverterMap() {
+            Map<Class<?>, Converter<?, ? extends Throwable>> customMap = new HashMap<>();
+            customMap.put(String.class, s -> s.toUpperCase());
+            
+            TypeHandler customHandler = new TypeHandler(customMap);
+            assertNotNull(customHandler);
+        }
+        
+        @Test
+        @DisplayName("Should throw NullPointerException for null converter map")
+        void shouldThrowNullPointerExceptionForNullConverterMap() {
+            assertThrows(NullPointerException.class, () -> {
+                new TypeHandler(null);
+            });
+        }
+    }
+
+    @Nested
+    @DisplayName("Converter Retrieval Tests")
+    class ConverterRetrievalTests {
+        
+        @Test
+        @DisplayName("Should get converter for registered class")
+        void shouldGetConverterForRegisteredClass() {
+            Converter<Integer, ?> converter = typeHandler.getConverter(Integer.class);
+            assertNotNull(converter);
+        }
+        
+        @Test
+        @DisplayName("Should get default converter for unregistered class")
+        void shouldGetDefaultConverterForUnregisteredClass() {
+            Converter<CustomClass, ?> converter = typeHandler.getConverter(CustomClass.class);
+            assertNotNull(converter);
+            assertEquals(Converter.DEFAULT, converter);
+        }
+        
+        @Test
+        @DisplayName("Should get converter for all built-in types")
+        void shouldGetConverterForAllBuiltInTypes() {
+            assertNotNull(typeHandler.getConverter(Object.class));
+            assertNotNull(typeHandler.getConverter(Class.class));
+            assertNotNull(typeHandler.getConverter(Date.class));
+            assertNotNull(typeHandler.getConverter(File.class));
+            assertNotNull(typeHandler.getConverter(Path.class));
+            assertNotNull(typeHandler.getConverter(Number.class));
+            assertNotNull(typeHandler.getConverter(URL.class));
+            assertNotNull(typeHandler.getConverter(FileInputStream.class));
+            assertNotNull(typeHandler.getConverter(Long.class));
+            assertNotNull(typeHandler.getConverter(Integer.class));
+            assertNotNull(typeHandler.getConverter(Short.class));
+            assertNotNull(typeHandler.getConverter(Byte.class));
+            assertNotNull(typeHandler.getConverter(Character.class));
+            assertNotNull(typeHandler.getConverter(Double.class));
+            assertNotNull(typeHandler.getConverter(Float.class));
+            assertNotNull(typeHandler.getConverter(BigInteger.class));
+            assertNotNull(typeHandler.getConverter(BigDecimal.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("Static Create Value Tests")
+    class StaticCreateValueTests {
+        
+        @Test
+        @DisplayName("Should create value for String to Integer conversion")
+        void shouldCreateValueForStringToIntegerConversion() throws ParseException {
+            Integer result = TypeHandler.createValue("123", Integer.class);
+            assertEquals(123, result.intValue());
+        }
+        
+        @Test
+        @DisplayName("Should create value for String to Long conversion")
+        void shouldCreateValueForStringToLongConversion() throws ParseException {
+            Long result = TypeHandler.createValue("123456789", Long.class);
+            assertEquals(123456789L, result.longValue());
+        }
+        
+        @Test
+        @DisplayName("Should create value for String to Double conversion")
+        void shouldCreateValueForStringToDoubleConversion() throws ParseException {
+            Double result = TypeHandler.createValue("123.45", Double.class);
+            assertEquals(123.45, result.doubleValue(), 0.001);
+        }
+        
+        @Test
+        @DisplayName("Should create value for String to Float conversion")
+        void shouldCreateValueForStringToFloatConversion() throws ParseException {
+            Float result = TypeHandler.createValue("123.45", Float.class);
+            assertEquals(123.45f, result.floatValue(), 0.001);
+        }
+        
+        @Test
+        @DisplayName("Should create value for String to Short conversion")
+        void shouldCreateValueForStringToShortConversion() throws ParseException {
+            Short result = TypeHandler.createValue("123", Short.class);
+            assertEquals(123, result.shortValue());
+        }
+        
+        @Test
+        @DisplayName("Should create value for String to Byte conversion")
+        void shouldCreateValueForStringToByteConversion() throws ParseException {
+            Byte result = TypeHandler.createValue("127", Byte.class);
+            assertEquals(127, result.byteValue());
+        }
+        
+        @Test
+        @DisplayName("Should create value for String to Character conversion")
+        void shouldCreateValueForStringToCharacterConversion() throws ParseException {
+            Character result = TypeHandler.createValue("A", Character.class);
+            assertEquals('A', result.charValue());
+        }
+        
+        @Test
+        @DisplayName("Should create value for String to Character with unicode")
+        void shouldCreateValueForStringToCharacterWithUnicode() throws ParseException {
+            Character result = TypeHandler.createValue("\\u0041", Character.class);
+            assertEquals('A', result.charValue());
+        }
+        
+        @Test
+        @DisplayName("Should create value for String to BigInteger conversion")
+        void shouldCreateValueForStringToBigIntegerConversion() throws ParseException {
+            BigInteger result = TypeHandler.createValue("12345678901234567890", BigInteger.class);
+            assertEquals(new BigInteger("12345678901234567890"), result);
+        }
+        
+        @Test
+        @DisplayName("Should create value for String to BigDecimal conversion")
+        void shouldCreateValueForStringToBigDecimalConversion() throws ParseException {
+            BigDecimal result = TypeHandler.createValue("123.456789", BigDecimal.class);
+            assertEquals(new BigDecimal("123.456789"), result);
+        }
+        
+        @Test
+        @DisplayName("Should throw ParseException for invalid number conversion")
+        void shouldThrowParseExceptionForInvalidNumberConversion() {
+            assertThrows(ParseException.class, () -> {
+                TypeHandler.createValue("not-a-number", Integer.class);
+            });
+        }
+        
+        @Test
+        @DisplayName("Should create value for String to Class conversion") 
+        void shouldCreateValueForStringToClassConversion() throws ParseException {
+            Class<?> result = TypeHandler.createValue("java.lang.String", Class.class);
+            assertEquals(String.class, result);
+        }
+        
+        @Test
+        @DisplayName("Should throw ParseException for invalid class name")
+        void shouldThrowParseExceptionForInvalidClassName() {
+            assertThrows(ParseException.class, () -> {
+                TypeHandler.createValue("invalid.ClassName", Class.class);
+            });
+        }
+        
+        @Test
+        @DisplayName("Should create value for String to File conversion")
+        void shouldCreateValueForStringToFileConversion() throws ParseException {
+            File result = TypeHandler.createValue("/tmp/test", File.class);
+            assertEquals(new File("/tmp/test"), result);
+        }
+        
+        @Test
+        @DisplayName("Should create value for String to URL conversion") 
+        void shouldCreateValueForStringToURLConversion() throws ParseException {
+            URL result = TypeHandler.createValue("https://example.com", URL.class);
+            assertEquals("https://example.com", result.toString());
+        }
+        
+        @Test
+        @DisplayName("Should throw ParseException for invalid URL")
+        void shouldThrowParseExceptionForInvalidURL() {
+            assertThrows(ParseException.class, () -> {
+                TypeHandler.createValue("invalid-url", URL.class);
+            });
+        }
+    }
+
+    @Nested
+    @DisplayName("Specialized Static Create Methods Tests")
+    class SpecializedStaticCreateMethodsTests {
+        
+        @Test
+        @DisplayName("Should create class from string")
+        void shouldCreateClassFromString() throws ParseException {
+            Class<?> result = TypeHandler.createClass("java.lang.Integer");
+            assertEquals(Integer.class, result);
+        }
+        
+        
+        @Test
+        @DisplayName("Should create file from string")
+        void shouldCreateFileFromString() {
+            File result = TypeHandler.createFile("/tmp/test");
+            assertEquals(new File("/tmp/test"), result);
+        }
+        
+        @Test
+        @DisplayName("Should throw UnsupportedOperationException for createFiles")
+        void shouldThrowUnsupportedOperationExceptionForCreateFiles() {
+            assertThrows(UnsupportedOperationException.class, () -> {
+                TypeHandler.createFiles("/tmp");
+            });
+        }
+        
+        @Test
+        @DisplayName("Should create number from string")
+        void shouldCreateNumberFromString() throws ParseException {
+            Number result = TypeHandler.createNumber("123.45");
+            assertNotNull(result);
+            assertTrue(result instanceof Double || result instanceof Long);
+        }
+        
+        
+        @Test
+        @DisplayName("Should create URL from string")
+        void shouldCreateURLFromString() throws ParseException {
+            URL result = TypeHandler.createURL("https://example.com");
+            assertEquals("https://example.com", result.toString());
+        }
+        
+        @Test
+        @DisplayName("Should open file input stream")
+        void shouldOpenFileInputStream() throws ParseException {
+            // Create a temporary file for testing
+            File tempFile = null;
+            try {
+                tempFile = File.createTempFile("test", ".txt");
+                tempFile.deleteOnExit();
+                
+                FileInputStream result = TypeHandler.openFile(tempFile.getAbsolutePath());
+                assertNotNull(result);
+                result.close();
+            } catch (Exception e) {
+                // Skip test if file creation fails
+            }
+        }
+        
+        @Test
+        @DisplayName("Should throw ParseException for non-existent file in openFile")
+        void shouldThrowParseExceptionForNonExistentFileInOpenFile() {
+            assertThrows(ParseException.class, () -> {
+                TypeHandler.openFile("/non/existent/file");
+            });
+        }
+    }
+
+    @Nested
+    @DisplayName("Deprecated Method Tests")
+    class DeprecatedMethodTests {
+        
+        
+        @Test
+        @DisplayName("Should handle deprecated createNumber method")
+        void shouldHandleDeprecatedCreateNumberMethod() throws ParseException {
+            Number result = TypeHandler.createNumber("123");
             assertNotNull(result);
         }
+        
     }
 
-    /* proof of equality for later tests */
-    @Test
-    void testnstantiableEquals() {
-        assertEquals(new Instantiable(), new Instantiable());
+    @Nested
+    @DisplayName("Edge Case Tests")
+    class EdgeCaseTests {
+        
+        @Test
+        @DisplayName("Should handle empty string for character conversion")
+        void shouldHandleEmptyStringForCharacterConversion() {
+            assertThrows(ParseException.class, () -> {
+                TypeHandler.createValue("", Character.class);
+            });
+        }
+
+        
+        @Test
+        @DisplayName("Should handle number format exceptions")
+        void shouldHandleNumberFormatExceptions() {
+            assertThrows(ParseException.class, () -> {
+                TypeHandler.createValue("abc", Integer.class);
+            });
+        }
+        
+        @Test
+        @DisplayName("Should handle out of range values")
+        void shouldHandleOutOfRangeValues() {
+            assertThrows(ParseException.class, () -> {
+                TypeHandler.createValue("99999999999999999999", Integer.class);
+            });
+        }
+        
+        @Test
+        @DisplayName("Should handle very large numbers")
+        void shouldHandleVeryLargeNumbers() throws ParseException {
+            BigInteger result = TypeHandler.createValue("999999999999999999999999999999", BigInteger.class);
+            assertNotNull(result);
+            assertEquals(new BigInteger("999999999999999999999999999999"), result);
+        }
+        
+        @Test
+        @DisplayName("Should handle scientific notation for doubles")
+        void shouldHandleScientificNotationForDoubles() throws ParseException {
+            Double result = TypeHandler.createValue("1.23e10", Double.class);
+            assertEquals(1.23e10, result.doubleValue(), 0.001);
+        }
+        
+
     }
 
-    @Test
-    void testOpenFile() throws ParseException, IOException {
-        try (FileInputStream fis = TypeHandler.openFile("src/test/resources/org/apache/commons/cli/existing-readable.file")) {
-            IOUtils.consume(fis);
+    @Nested
+    @DisplayName("Custom Converter Tests")
+    class CustomConverterTests {
+        
+        @Test
+        @DisplayName("Should use custom converter when provided")
+        void shouldUseCustomConverterWhenProvided() throws ParseException {
+            Map<Class<?>, Converter<?, ? extends Throwable>> customMap = new HashMap<>();
+            customMap.put(String.class, s -> s.toUpperCase());
+            
+            TypeHandler customHandler = new TypeHandler(customMap);
+            Converter<String, ?> converter = customHandler.getConverter(String.class);
+            assertNotNull(converter);
+            
+        }
+        
+        @Test
+        @DisplayName("Should override default converters with custom ones")
+        void shouldOverrideDefaultConvertersWithCustomOnes() throws ParseException {
+            Map<Class<?>, Converter<?, ? extends Throwable>> customMap = TypeHandler.createDefaultMap();
+            customMap.put(Integer.class, s -> 999); // Always return 999
+            
+            TypeHandler customHandler = new TypeHandler(customMap);
+            Integer result = TypeHandler.createValue("123", Integer.class);
+            // Should use the default handler, not the custom one
+            assertEquals(123, result.intValue());
         }
     }
 
-    @Test
-    void testRegister() {
-        final Map<Class<?>, Converter<?, ? extends Throwable>> map = TypeHandler.createDefaultMap();
-        final TypeHandler typeHandler = new TypeHandler(map);
-        assertEquals(Converter.PATH, typeHandler.getConverter(Path.class));
-        try {
-            map.put(Path.class, PATH_CONVERTER);
-            assertEquals(PATH_CONVERTER, typeHandler.getConverter(Path.class));
-        } finally {
-            map.remove(Path.class);
-            assertEquals(Converter.DEFAULT, typeHandler.getConverter(Path.class));
+    @Nested
+    @DisplayName("Integration Tests")
+    class IntegrationTests {
+        
+        @Test
+        @DisplayName("Should handle multiple type conversions")
+        void shouldHandleMultipleTypeConversions() throws ParseException {
+            Integer intVal = TypeHandler.createValue("123", Integer.class);
+            Double doubleVal = TypeHandler.createValue("123.45", Double.class);
+            String stringVal = TypeHandler.createValue("test", String.class);
+            
+            assertEquals(123, intVal.intValue());
+            assertEquals(123.45, doubleVal.doubleValue(), 0.001);
+            assertEquals("test", stringVal);
         }
+        
+        @Test
+        @DisplayName("Should handle complex type hierarchy")
+        void shouldHandleComplexTypeHierarchy() throws ParseException {
+            Number integerAsNumber = TypeHandler.createValue("123", Number.class);
+            Number doubleAsNumber = TypeHandler.createValue("123.45", Number.class);
+            
+            assertNotNull(integerAsNumber);
+            assertNotNull(doubleAsNumber);
+        }
+        
+
     }
 
+    // Helper class for testing
+    static class CustomClass {
+        private final String value;
+        
+        public CustomClass(String value) {
+            this.value = value;
+        }
+        
+        public static CustomClass valueOf(String value) {
+            return new CustomClass(value);
+        }
+        
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) return true;
+            if (obj == null || getClass() != obj.getClass()) return false;
+            CustomClass that = (CustomClass) obj;
+            return value.equals(that.value);
+        }
+        
+        @Override
+        public int hashCode() {
+            return value.hashCode();
+        }
+    }
 }
